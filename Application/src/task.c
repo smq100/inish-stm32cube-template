@@ -1,0 +1,746 @@
+/*!
+******************************************************************************
+ * @copyright Copyright (c) 2026 Inish Corporation
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *
+ ******************************************************************************
+
+ @file    task.c
+ @brief   Implementation of the TASK superloop
+ @author  Steve Quinlan
+ @date    2026-March
+
+ ******************************************************************************
+
+ @verbatim
+
+# The Superloop Tasks Architecture
+
+This software does not employ a real-time operating system. It uses a superloop architecture using a modular and
+consistent interface along with features that provide precise execution control and tuning metrics.
+
+The basic element of the task architecture is referred to as a *task*. Tasks are similar to threads in an RTOS.
+Each task is implemented in its own implementation and header file (.c/h) and, at a minimum,
+includes five functions of the following prototypes:
+
+* typedef bool (fnTaskInit)(void)
+* typedef bool (fnTaskExec)(void)
+* typedef bool (fnTaskShutdown)(void)
+* typedef bool (fnTaskTest)(void)
+* typedef bool (fnTaskDebug)(void)
+
+## Initialization Function
+The initialization function is called at system startup to initialize the task.
+
+Each task must implement an initialization function, and that function must be included in the tTaskConfig _Config data
+structures. The initialization function must return true, otherwise the associated will be disabled. Normally, all tasks
+must return true.
+
+## Exec Function
+The executive function is the main processing function of the task. It is called repeatedly throughout the application
+lifetime.
+
+Each task must implement an exec function, and that function must be included in the tTaskConfig _Config data
+structures. The exec function must return true.
+
+## Shutdown Function
+The shutdown function is called when the system is powering down and allows for the attempted graceful shutdown of
+tasks.
+
+Each task must implement a shutdown function, and that function must be included in the tTaskConfig _Config data
+structures. Tasks that need no shutdown processing simply return true. Any shutdown function that returns false will be
+called again in TASK_AreAllShutdown() until it returns a true.
+
+## Test Function
+The test function is called at system startup to test the task during the power-on self-test (POST).
+
+Each task must implement a test function, and that function must be included in the tTaskConfig _Config data structures.
+The test function must return true, otherwise the associated task will be disabled.
+
+## Debug Function
+The debug entry provides optional debugging support
+
+## Task Frequency
+Not every task needs to be serviced at every run of the superloop. The tTaskConfig structure contains the variable Delay
+that may be set to a value greater than zero to lower the frequency in which the executive is called. When Delay = 0,
+the exec function of the associated task will be called at every loop. Otherwise the task executive will be called every
+‘Delay’ times in the loop.
+
+## Task Metrics
+Simple tasks metrics are available to provide data to assist in debugging and tuning task execution. When the module
+variable _MetricsEnabled = true, the number of executions (aka context switches in a RTOS environment) as well as the
+time spent in each task execution.
+
+ @endverbatim
+******************************************************************************/
+
+#define TASK_PROTECTED
+
+#include <assert.h>
+
+#include "main.h"
+
+#include "task.h"
+
+#include "task_system.h"
+#include "task_serial.h"
+#include "task_daq.h"
+#include "task_classb.h"
+#include "task_tech.h"
+#include "task_buttons.h"
+#include "task_led.h"
+#include "task_app.h"
+#include "timer.h"
+#include "util.h"
+#include "log.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+//! Task configuration data structure
+typedef struct
+{
+  bool Enabled;          //!< Task enabled when true
+  fnTaskInit* Init;      //!< Task initialization method
+  fnTaskExec* Exec;      //!< Task executive method
+  fnTaskTest* Shutdown;  //!< Task shutdown method
+  fnTaskTest* Test;      //!< Task POST test method
+  uint32_t Delay_ms;     //!< Tick priority
+  uint32_t
+    TestDelay;       //!< Testing delay milliseconds (testing in some modules needs a delay to allow time to initialize)
+  const char* Name;  //!< Module name used for logging
+} tTaskConfig;
+
+//! Task runtime data structure
+typedef struct
+{
+  bool Initialized;         //!< True when process is initialized
+  uint32_t Timestamp;       //!< The active tick value
+  tTaskMetrics Metrics;     //!< Task metrics
+  bool Shutdown;            //!< True when the process has been properly shutdown
+  uint32_t DebugPeriod_ms;  //!< Period to callback debug function (milliseconds)
+} tTaskRuntime;
+
+/* Private define ------------------------------------------------------------*/
+/* Private macro -------------------------------------------------------------*/
+/* Public variables ----------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+
+static const char* _Module = "TASK";               //!< Module name used for debug logging
+static const uint8_t _NumTasks = eTask_NUM;        //!< Number of tasks
+static const bool _MetricsEnabled = true;          //!< True to collect task metrics
+static const uint32_t _PrintDebugInterval_ms = 0;  //!< Print debug interval in ms (0=disabled)
+
+//! Task configuration defaults (order must match tTaskConfig enum)
+// Delays were chosen, if possible, to distribute servicing of tasks so that tasks are
+// not all serviced on the same loop iteration by using prime numbers. Primes:
+// 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97
+// 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199
+static const tTaskConfig _Defaults[] = {
+  { true, SYSTEM_Init, SYSTEM_Exec, SYSTEM_Shutdown, SYSTEM_Test, 23, 0, "SYS" },    // eTask_System
+  { true, SERIAL_Init, SERIAL_Exec, SERIAL_Shutdown, SERIAL_Test, 7, 0, "SER" },     // eTask_Serial
+  { true, DAQ_Init, DAQ_Exec, DAQ_Shutdown, DAQ_Test, 9, 0, "DAQ" },                 // eTask_DAQ
+  { true, CLASSB_Init, CLASSB_Exec, CLASSB_Shutdown, CLASSB_Test, 503, 0, "CLSB" },  // eTask_ClassB
+  { true, TECH_Init, TECH_Exec, TECH_Shutdown, TECH_Test, 13, 0, "TECH" },           // eTask_Tech
+  { true, BUTTON_Init, BUTTON_Exec, BUTTON_Shutdown, BUTTON_Test, 11, 0, "BTN" },    // eTask_Buttons
+  { true, LED_Init, LED_Exec, LED_Shutdown, LED_Test, 31, 0, "LED" },                // eTask_LED
+  { true, APP_Init, APP_Exec, APP_Shutdown, APP_Test, 31, 0, "APP" },                // eTask_APP
+};
+
+static_assert(sizeof(_Defaults) / sizeof(tTaskConfig) == eTask_NUM, "tTaskConfig size mismatch");
+
+static tTaskConfig _Config[eTask_NUM];    //!< Task configuration data. Task configuration initially based on _Defaults
+static tTaskRuntime _Runtime[eTask_NUM];  //!< Task runtime data
+static tLoopMetrics _LoopMetrics;         //!< Loop metrics data
+static tTask _ActiveTask;                 //!< The active task in the executive loop
+static uint32_t _ErrorField;              //!< Task error field
+static uint16_t _ShutdownTimeout_ms = 0;  //!< Shutdown timer in ms. 0 means shutdown not initiated
+static uint32_t _ShutdownTimestamp = 0;   //!< Shutdown timestamp used to track shutdown timeout
+static bool _ShutdownInProcess = false;   //!< True when shutdown has been initiated
+
+/* Private function prototypes -----------------------------------------------*/
+static void _ProcessLoopMetrics(void);
+static void _ProcessTaskMetrics(tTask Task, bool Begin);
+static void _ProcessShutdown(void);
+
+/* Public Implementation -----------------------------------------------------*/
+
+/*******************************************************************/
+/*!
+ @brief     Initializes all task in the _Task array
+ @return    True if all tasks initialized properly
+
+ This functions takes the form of the TASK init prototype, fnTaskExec (see task.c/h)
+
+ *******************************************************************/
+bool TASK_Init(void)
+{
+  tTask task;
+  bool success = true;
+
+  _ActiveTask = (tTask)0;
+  _ErrorField = 0;
+  _ShutdownTimeout_ms = 0;
+  _ShutdownInProcess = false;
+
+  // Loop metrics
+  _LoopMetrics.Loops = 0;
+  _LoopMetrics.TimeTotal_s = 0.0f;
+  _LoopMetrics.TimeMin_ms = 100000;  // Set to a large value so first measurement is lower
+  _LoopMetrics.TimeMax_ms = 0;
+  _LoopMetrics.TimeAvg_ms = 0;
+
+  // Set defaults and initialize other runtime data and metrics
+  for (task = (tTask)0; task < _NumTasks; task++)
+  {
+    // Set task configurations to the defaults
+    _Config[task] = _Defaults[task];
+
+    _Runtime[task].Initialized = false;
+    _Runtime[task].Timestamp = 0;
+    _Runtime[task].Shutdown = false;
+    _Runtime[task].DebugPeriod_ms = 0;
+
+    _Runtime[task].Metrics.Name = _Config[task].Name;
+    _Runtime[task].Metrics.Delay_ms = _Config[task].Delay_ms;
+    _Runtime[task].Metrics.Switches = 0;
+    _Runtime[task].Metrics.TimeTotal_s = 0.0f;
+    _Runtime[task].Metrics.TimeMin_ms = 100000;  // Set to a large value so first measurement is lower
+    _Runtime[task].Metrics.TimeMax_ms = 0;
+    _Runtime[task].Metrics.TimeAvg_ms = 0;
+  }
+
+  // Initialize all enabled tasks
+  for (task = (tTask)0; task < _NumTasks; task++)
+  {
+    if (!_Config[task].Enabled)
+    {
+      // Don't initialize
+    }
+    else if (!_Config[task].Init())
+    {
+      // Initialization failed. Disable the task
+      _Config[task].Enabled = false;
+
+      // Set the error bit
+      _ErrorField |= (1 << task);
+
+      print("*** Error: Failed to initialize task '%s'\r\n", _Config[task].Name);  // Print msg to boot uart
+    }
+  }
+
+  // Tasks initialized. Now test
+  TASK_Test();
+
+  success = (_ErrorField == 0);
+
+  if (success)
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Initialized");
+  }
+  else
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Not Initialized");
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Executes the executive function of all tasks in the _Task array in an infinite loop
+ @return    This function should never return
+
+ This functions takes the form of the TASK executive prototype, fnTaskExec (see task.c/h)
+
+*******************************************************************/
+bool TASK_Exec(void)
+{
+  static bool process = true;
+  static uint32_t timestamp = 0;
+
+  while (process)
+  {
+    if (!_Config[_ActiveTask].Enabled)
+    {
+      // Skip disabled tasks
+    }
+    else if (_ShutdownInProcess)
+    {
+      // Shutdown has been initiated, so call shutdown functions of tasks
+      for (tTask task = (tTask)0; task < _NumTasks; task++)
+      {
+        if (_Runtime[task].Shutdown)
+        {
+          // Already shutdown
+        }
+        else if (!_Config[task].Enabled)
+        {
+          _Runtime[task].Shutdown = true;
+        }
+        else
+        {
+          // Call each task's Shutdown function
+          _Runtime[task].Shutdown = _Config[task].Shutdown();
+        }
+      }
+
+      // Check if all tasks are shutdown
+      if (TASK_AreAllShutdown())
+      {
+        // Time to meet your maker. Bye bye.
+        HAL_NVIC_SystemReset();
+      }
+      else if (TIMER_GetElapsed_ms(_ShutdownTimestamp) >= (_ShutdownTimeout_ms * 3))
+      {
+        // Timeout and reset if a task shutdown is taking too long
+        HAL_NVIC_SystemReset();
+      }
+    }
+    else if (TIMER_GetElapsed_ms(_Runtime[_ActiveTask].Timestamp) >= _Config[_ActiveTask].Delay_ms)
+    {
+      // Execute the task executive if the delay tick value is greater than desired
+      {
+        _Runtime[_ActiveTask].Timestamp = TIMER_GetTick();
+
+        if (_MetricsEnabled)
+        {
+          _ProcessTaskMetrics(_ActiveTask, true);
+        }
+
+        // Execute the task's main exec function
+        process = _Config[_ActiveTask].Exec();
+
+        if (_MetricsEnabled)
+        {
+          _ProcessTaskMetrics(_ActiveTask, false);
+        }
+      }
+    }
+
+    // Prepare for next task
+    if (++_ActiveTask >= _NumTasks)
+    {
+      _ActiveTask = (tTask)0;
+
+      // Process loop metrics if enabled
+      if (_MetricsEnabled)
+      {
+        _ProcessLoopMetrics();
+      }
+    }
+
+    // Print task metrics for task tuning if desired
+    if (!_MetricsEnabled)
+    {
+      // Nothing to print if metrics are disabled
+    }
+    else if (_PrintDebugInterval_ms > 0)
+    {
+      if (TIMER_GetElapsed_ms(timestamp) > _PrintDebugInterval_ms)
+      {
+        for (tTask task = (tTask)0; task < _NumTasks; task++)
+        {
+          TASK_PrintStatus(task, false);
+        }
+
+        timestamp = TIMER_GetTick();
+      }
+    }
+
+    _ProcessShutdown();
+  }
+
+  // Should never return
+  return false;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Shutdown processing
+ @return    True if ok for the system to powerdown
+
+ This functions takes the form of the TASK executive prototype, fnTaskShutdown (see task.c/h)
+
+ *******************************************************************/
+bool TASK_Shutdown(void)
+{
+  // Perform shutdown for all enabled tasks
+  for (int task = 0; task < _NumTasks; task++)
+  {
+    if (_Config[task].Enabled)
+    {
+      // Call each task's Shutdown function
+      _Runtime[task].Shutdown = _Config[task].Shutdown();
+    }
+    else
+    {
+      _Runtime[task].Shutdown = true;
+    }
+  }
+
+  return true;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Main TASK POST testing routine
+ @return    True if successful, otherwise false
+
+ This functions takes the form of the TASK test prototype, fnTaskExec (see task.c/h)
+
+ *******************************************************************/
+bool TASK_Test(void)
+{
+  static tTask task = (tTask)0;
+
+  // Perform POST for all enabled tasks
+  for (task = (tTask)0; task < _NumTasks; task++)
+  {
+    if (_Config[task].Enabled)
+    {
+      // Some devices need some time to stabilize before we should test them
+      while (SYSTEM_GetUpTime_MS() < _Config[task].TestDelay)
+      {
+      }
+
+      if (_Config[task].Test())
+      {
+        // Passed testing
+        _Runtime[task].Initialized = true;
+      }
+      else
+      {
+        // Disable the task
+        _Config[task].Enabled = false;
+
+        // Set the error bit
+        _ErrorField |= (1 << task);
+      }
+    }
+  }
+
+  return (_ErrorField == 0);
+}
+
+/*******************************************************************/
+/*!
+ @brief     Returns the initialization status
+ @param     Task: The task
+ @return    True if initialized
+
+ *******************************************************************/
+bool TASK_IsInitialized(tTask Task)
+{
+  return (Task < _NumTasks) ? _Runtime[Task].Initialized : false;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Returns the initialization status of all tasks
+ @return    True if initialized
+
+ *******************************************************************/
+bool TASK_AreAllInitialized(void)
+{
+  bool init = true;
+
+  for (int task = (tTask)0; task < _NumTasks; task++)
+  {
+    if (_Config[task].Enabled)
+    {
+      if (!_Runtime[task].Initialized)
+      {
+        init = false;
+        break;
+      }
+    }
+  }
+
+  return init;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Returns the shutdown status when power down
+ @return    True if all task are shutdown
+
+ *******************************************************************/
+bool TASK_AreAllShutdown(void)
+{
+  bool shutdown = true;
+
+  for (int task = (tTask)0; task < _NumTasks; task++)
+  {
+    if (!_Config[task].Enabled)
+    {
+      // Skip disabled tasks
+    }
+    else if (_Runtime[task].Shutdown)
+    {
+      // Yes, is shutdown
+    }
+    else
+    {
+      shutdown = false;
+      break;
+    }
+  }
+
+  return shutdown;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Sets the callback function that will be called at the debug period
+ @param     Task: The task
+ @param     Delay: Delay in milliseconds
+
+ *******************************************************************/
+void TASK_SetDelay(tTask Task, uint32_t Delay)
+{
+  if (Task < _NumTasks)
+  {
+    _Config[Task].Delay_ms = Delay;
+  }
+}
+
+/*******************************************************************/
+/*!
+ @brief     Sets the callback function that will be called at the debug period
+
+
+ *******************************************************************/
+uint32_t TASK_GetErrorField(void)
+{
+  return _ErrorField;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Gets the status of a tasks
+ @param     Task: The desired task
+ @param     Loop: Pointer for overall loop metrics
+ @param     Metrics: Pointer for task metrics
+ @return    True if successful
+
+ *******************************************************************/
+bool TASK_GetStatus(tTask Task, tLoopMetrics* Loop, tTaskMetrics* Metrics)
+{
+  bool success = false;
+
+  if (!IsRAM((uintptr_t)Loop))
+  {
+    assert_always();
+  }
+  else if (!IsRAM((uintptr_t)Metrics))
+  {
+    assert_always();
+  }
+  else if (Task < _NumTasks)
+  {
+    Loop->Loops = _LoopMetrics.Loops;
+    Loop->TimeTotal_s = _LoopMetrics.TimeTotal_s;
+    Loop->TimeMin_ms = _LoopMetrics.TimeMin_ms;
+    Loop->TimeMax_ms = _LoopMetrics.TimeMax_ms;
+    Loop->TimeAvg_ms = _LoopMetrics.TimeAvg_ms;
+
+    Metrics->Name = _Config[Task].Name;
+    Metrics->Delay_ms = _Config[Task].Delay_ms;
+    Metrics->Switches = _Runtime[Task].Metrics.Switches;
+    Metrics->TimeTotal_s = _Runtime[Task].Metrics.TimeTotal_s;
+    Metrics->TimeMin_ms = _Runtime[Task].Metrics.TimeMin_ms;
+    Metrics->TimeMax_ms = _Runtime[Task].Metrics.TimeMax_ms;
+    Metrics->TimeAvg_ms = _Runtime[Task].Metrics.TimeAvg_ms;
+
+    success = true;
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Gets the name of a task
+ @param     Task: The desired task
+ @return    Pointer to name
+
+ *******************************************************************/
+const char* TASK_GetName(tTask Task)
+{
+  return (Task < _NumTasks) ? _Config[Task].Name : "error";
+}
+
+/*******************************************************************/
+/*!
+ @brief     Prints the status of a tasks
+ @param     Task: The desired task
+ @param     Summary: True if only summary needed
+
+ *******************************************************************/
+void TASK_PrintStatus(tTask Task, bool Summary)
+{
+  if (Summary)
+  {
+    LOG_Write(eLogger_Sys,
+              eLogLevel_Always,
+              _Module,
+              false,
+              "Summary: loops=%lu%08lu, tot=%.01fs, min=%lu, max=%lu, avg=%lu",
+              (uint32_t)(_LoopMetrics.Loops >> 32),
+              (uint32_t)(_LoopMetrics.Loops & 0xFFFFFFFF),
+              _LoopMetrics.TimeTotal_s,
+              _LoopMetrics.TimeMin_ms,
+              _LoopMetrics.TimeMax_ms,
+              _LoopMetrics.TimeAvg_ms);
+  }
+  else if (Task < _NumTasks)
+  {
+    LOG_Write(eLogger_Sys,
+              eLogLevel_Always,
+              _Module,
+              false,
+              "%4s: d=%3lu, s=%lu%08lu, tot=%.01fs, min=%lu, max=%lu, avg=%lu",
+              _Runtime[Task].Metrics.Name,
+              _Runtime[Task].Metrics.Delay_ms,
+              (uint32_t)(_Runtime[Task].Metrics.Switches >> 32),
+              (uint32_t)(_Runtime[Task].Metrics.Switches & 0xFFFFFFFF),
+              _Runtime[Task].Metrics.TimeTotal_s,
+              _Runtime[Task].Metrics.TimeMin_ms,
+              _Runtime[Task].Metrics.TimeMax_ms,
+              _Runtime[Task].Metrics.TimeAvg_ms);
+  }
+}
+
+/*******************************************************************/
+/*!
+ @brief     Resets all tasks to their default configurations
+
+ *******************************************************************/
+void TASK_ResetDefaults(void)
+{
+  for (int task = (tTask)0; task < _NumTasks; task++)
+  {
+    _Config[task] = _Defaults[task];
+  }
+
+  LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Resetting to defaults");
+}
+
+/*******************************************************************/
+/*!
+ @brief     Sets the shutdown timer
+ @param     Time_ms  Time in milliseconds
+ *******************************************************************/
+void TASK__BeginShutdown(uint16_t Time_ms)
+{
+  _ShutdownTimeout_ms = Time_ms > 0 ? Time_ms : 1ul;
+  _ShutdownTimestamp = TIMER_GetTick();
+
+  LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Shutdown initiated. Time to shutdown: %d ms", Time_ms);
+}
+
+/* Private Implementation -----------------------------------------------------*/
+
+/*******************************************************************/
+/*!
+ @brief     Process metrics for the system
+
+ *******************************************************************/
+static void _ProcessLoopMetrics(void)
+{
+  static uint32_t timestamp = 0;
+  uint32_t time;
+
+  time = TIMER_GetElapsed_ms(timestamp);
+
+  _LoopMetrics.Loops++;
+  _LoopMetrics.TimeTotal_s += (time / 1000.0f);
+
+  if (time < _LoopMetrics.TimeMin_ms)
+  {
+    _LoopMetrics.TimeMin_ms = time;
+  }
+  else if (time > _LoopMetrics.TimeMax_ms)
+  {
+    _LoopMetrics.TimeMax_ms = time;
+  }
+
+  _LoopMetrics.TimeAvg_ms = _LoopMetrics.TimeTotal_s / _LoopMetrics.Loops * 1000.0f;
+
+  timestamp = TIMER_GetTick();
+}
+
+/*******************************************************************/
+/*!
+ @brief     Process metrics for a active task
+ @param     Task: The relevant task
+ @param     Begin: True if beginning a task metric
+
+ *******************************************************************/
+static void _ProcessTaskMetrics(tTask Task, bool Begin)
+{
+  static uint32_t timestamp[eTask_NUM] = { 0 };
+  uint32_t time;
+
+  if (Begin)
+  {
+    // Track number of "context switches"
+    _Runtime[Task].Metrics.Switches++;
+
+    // Get ticks to compute exec time
+    timestamp[Task] = TIMER_GetTick();
+  }
+  else
+  {
+    time = TIMER_GetElapsed_ms(timestamp[Task]);
+
+    // Update task metrics
+    _Runtime[Task].Metrics.TimeTotal_s += (time / 1000.0f);
+
+    if (time < _Runtime[Task].Metrics.TimeMin_ms)
+    {
+      _Runtime[Task].Metrics.TimeMin_ms = time;
+    }
+    else if (time > _Runtime[Task].Metrics.TimeMax_ms)
+    {
+      _Runtime[Task].Metrics.TimeMax_ms = time;
+    }
+
+    _Runtime[Task].Metrics.TimeAvg_ms = _Runtime[Task].Metrics.TimeTotal_s / _Runtime[Task].Metrics.Switches * 1000.0f;
+  }
+}
+
+/*******************************************************************/
+/*!
+ @brief     Process shutdown by calling shutdown functions
+ *******************************************************************/
+static void _ProcessShutdown(void)
+{
+  if (_ShutdownTimeout_ms > 0 && !_ShutdownInProcess)
+  {
+    if (TIMER_GetElapsed_ms(_ShutdownTimestamp) >= _ShutdownTimeout_ms)
+    {
+      _ShutdownInProcess = true;
+    }
+  }
+}

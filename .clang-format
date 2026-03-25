@@ -1,0 +1,41 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ContinuationIndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 120
+SortIncludes: false
+Cpp11BracedListStyle: false
+PackConstructorInitializersStyle : AlwaysNextLine
+SeparateDefinitionBlocks: Always
+SpaceBeforeParens: ControlStatements
+
+BreakBeforeBraces: Allman
+
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: true
+  AfterStruct: true
+  AfterEnum: true
+  AfterUnion: true
+
+AllowShortIfStatementsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+
+
+PointerAlignment: Left
+SpacesBeforeTrailingComments: 2
+
+IndentCaseLabels: true
+IndentCaseBlocks: false
+
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+CommentPragmas: '^/* USER CODE'
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: 1
+
+BinPackArguments: false
+BinPackParameters: false

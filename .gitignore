@@ -1,0 +1,10 @@
+Debug/
+.settings/
+.vscode/
+
+*.code-workspace
+*.bak
+*.txt
+*.dwf3work
+*.ptp
+*.launch
