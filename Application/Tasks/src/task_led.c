@@ -96,7 +96,7 @@ static tLEDRuntime _Runtime[eLED_NUM];  //!< Runtime data of the LEDs
 /* Private function prototypes -----------------------------------------------*/
 
 static void _OnOff(tLED led, bool On);
-static void _ProcessFlash(tLED led);
+static void _ProcessEffects(tLED led);
 static void _ProcessPulse(tLED led);
 static void _ToggleFlash(tLED led);
 static void _ProcessTest(void);
@@ -156,23 +156,21 @@ bool LED_Init(void)
  *******************************************************************/
 bool LED_Exec(void)
 {
-  tLED led;
-
   // Process any LEDs testing
   if (!_Initialized)
   {
   }
-  else if (_Testing)
+  else if (!_Testing)
   {
-    _ProcessTest();
+    // Process any flashing LEDs
+    for (tLED led = (tLED)0; led < eLED_NUM; led++)
+    {
+      _ProcessEffects(led);
+    }
   }
   else
   {
-    // Process any flashing LEDs
-    for (led = (tLED)0; led < eLED_NUM; led++)
-    {
-      _ProcessFlash(led);
-    }
+    _ProcessTest();
   }
 
   return true;
@@ -512,7 +510,7 @@ static void _OnOff(tLED led, bool On)
  @brief     Process flashing
  @param     led: The selected LED
  *******************************************************************/
-static void _ProcessFlash(tLED led)
+static void _ProcessEffects(tLED led)
 {
   if (!_Runtime[led].Flash.Active)
   {

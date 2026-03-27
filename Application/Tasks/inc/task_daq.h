@@ -42,14 +42,14 @@
 //! The available DAQ items. When adding items update tech.c::_Handler_Get() for proper output formatting
 typedef enum
 {
-  eDAQ_NOP,      //!< No operation
-  eDAQ_Test,     //!< Test read
-  eDAQ_TempPCB,  //!< PCB Temp
-  eDAQ_Vref,     //!< ADC Vref
-  eDAQ_Uptime,   //!< Uptime. Note: This is not necessarily the time since boot because it is not updated during sleep
-  eDAQ_Sleep,    //!< Sleep time
-  eDAQ_ClassBTest,  //!< ClassB runtime test status
-  eDAQ_NUM
+  eDAQ_NOP,      ///< No operation
+  eDAQ_Test,     ///< Test read
+  eDAQ_TempPCB,  ///< PCB Temp
+  eDAQ_Vref,     ///< ADC Vref
+  eDAQ_Uptime,   ///< Uptime. Note: This is not necessarily the time since boot because it is not updated during sleep
+  eDAQ_Sleep,    ///< Sleep time
+  eDAQ_ClassBTest,  ///< ClassB runtime test status
+  eDAQ_Entry_NUM
 } tDAQ_Entry;
 
 //! Prototype for callback

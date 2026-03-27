@@ -58,7 +58,7 @@
 #define RESPONSE_BUFFER_SIZE 256
 #define CRC_BUFFER_SIZE_RX 5  ///< 4 chars for CRC plus the CRC delimiter
 #define MAX_STREAM_ITEMS 5    ///< Max number of streaming data values
-#define MAX_TOKENS eDAQ_NUM
+#define MAX_TOKENS eDAQ_Entry_NUM
 #define MAX_CMD_SIZE 8
 #define MAX_NOTE_SIZE 10
 
@@ -195,7 +195,7 @@ static const uint8_t _StartChar = '*';                       ///< Command start 
 static const uint8_t _EndChar = ';';                         ///< Command end delimiter
 static const uint8_t _CRCChar = '#';                         ///< Command CRC delimiter
 static const uint32_t _Timeout_ms = 500;                     ///< Command processing timeout in milliseconds
-static const uint32_t _NumDAQEntries = eDAQ_NUM;             ///< Number of available DAQ items
+static const uint32_t _NumDAQEntries = eDAQ_Entry_NUM;       ///< Number of available DAQ items
 static const uint32_t _MaxStreamItems = MAX_STREAM_ITEMS;    ///< Max number of streamable parameters (DAQ items)
 static const int32_t _StreamMinFreq = 1;                     ///< Min stream data delivery frequency
 static const int32_t _StreamMaxFreq = DAQ_MAX_UPDATE_FREQ;   ///< Max stream data delivery frequency
@@ -923,7 +923,7 @@ static bool _Handler_Help(char* StreamTokens)
   _WriteMessage("reboot (n)    Reboots the system. n=optional delay in ms", true);
   _WriteMessage("reset         Resets all settings to factory defaults (system will reboot)", true);
   _WriteMessage("meta (n)      Returns a DAQ item metadata. n=DAQ index, or interface metadata if none", true);
-  _WriteMessage("tasks (n)     Returns task information (n=task, otherwise all tasks)", true);
+  _WriteMessage("tasks (n)     Returns task information (n=task, otherwise all tasks, -1 for idle metrics)", true);
   _WriteMessage("get n(,m)     Returns a DAQ value. n=item, m=optional subitems (no spaces between items)", true);
   _WriteMessage("set n,v       Set a DAQ value. n=DAQ item, v=numeric value (not all items modifiable)", true);
   _WriteMessage("log n         Returns log information. n=log index", true);
@@ -1114,16 +1114,23 @@ static bool _Handler_Meta(char* StreamTokens)
 static bool _Handler_Tasks(char* StreamTokens)
 {
   int entry, items;
-  bool success = true;
+  bool success = false;
 
   items = sscanf(_Tokens[1], "%i", &entry);
 
   LOG_Print(eLogger_Sys, "", true);
   if (items == 1)
   {
-    if ((entry >= 0) && (entry < eTask_NUM))
+    // Print specific task details
+    if (entry < 0)
+    {
+      TASK_PrintStatus((tTask)0, true);
+      success = true;
+    }
+    else if (entry < eTask_NUM)
     {
       TASK_PrintStatus((tTask)entry, false);
+      success = true;
     }
   }
   else
@@ -1133,6 +1140,8 @@ static bool _Handler_Tasks(char* StreamTokens)
     {
       TASK_PrintStatus(i, false);
     }
+
+    success = true;
   }
 
   return success;
@@ -1149,8 +1158,6 @@ static bool _Handler_Get(char* StreamTokens)
   bool success = false;
   int items;
   int v[2];
-  tDAQ_Entry entry;
-  uint8_t index;
 
   if (StreamTokens == NULLPTR)
   {
@@ -1178,8 +1185,8 @@ static bool _Handler_Get(char* StreamTokens)
     char output[RESPONSE_BUFFER_SIZE] = { '\0' };
     char note[MAX_NOTE_SIZE] = { '\0' };
 
-    entry = (tDAQ_Entry)v[0];
-    index = (items == 2) ? v[1] : 0;
+    tDAQ_Entry entry = (tDAQ_Entry)v[0];
+    uint8_t index = (items == 2) ? v[1] : 0;
 
     if (entry < _NumDAQEntries)
     {
@@ -1376,8 +1383,11 @@ static bool _Handler_StreamItems(char* StreamTokens)
   {
     // No items parsed
   }
-  else if (items >
-           _MaxStreamItems * 2)  // Items are in pairs of value and subvalue, so max items is 2x MAX_STREAM_ITEMS
+  else if (items % 2 != 0)
+  {
+    // Items should be in pairs of value[subvalue]
+  }
+  else if (items > _MaxStreamItems * 2)  // Items are in pairs of value[subvalue], so max items is 2x MAX_STREAM_ITEMS
   {
     // Too many items
   }
@@ -1386,6 +1396,7 @@ static bool _Handler_StreamItems(char* StreamTokens)
     _ResetStream(true);
 
     success = true;
+    items /= 2;  // Convert from number of parsed values to number of item pairs
     for (uint32_t i = 0; i < _MaxStreamItems; i++)
     {
       if (i < items)
@@ -1400,7 +1411,6 @@ static bool _Handler_StreamItems(char* StreamTokens)
       else
       {
         // Invalid item. Can't proceed
-        // success = false;
         break;
       }
     }
@@ -1456,7 +1466,7 @@ static bool _Handler_StreamStart(char* StreamTokens)
   bool success = false;
   int items;
   char command[MAX_CMD_SIZE];
-  int32_t freq;
+  int32_t freq;  // Frequency in Hz
 
   items = sscanf(_Tokens[1], "%[^,],%li", command, &freq);
   LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "sstart: command=%s, freq=%li", command, freq);

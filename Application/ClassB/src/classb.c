@@ -36,6 +36,7 @@
 #define CLASSB_PROTECTED
 
 #include "main.h"
+#include "task_system.h"
 #include "classb.h"
 #include "classb_startup.h"
 #include "classb_vars.h"
@@ -413,7 +414,7 @@ void ClassB_Fail_Runtime(tClassBRunItem Test)
   LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Runtime test '%s' failed.", _RunConfig[Test].Name);
 
   // Flash the LED based on the test that failed. test+1 so test 0 pulses once.
-  LED_Pulse(eLED_Status, 1.0f, -1, (int32_t)(Test + 1), "");
+  SYSTEM_SetStatusLED(eStatusLED_Error, (int8_t)(Test + 1));
 }
 
 /*******************************************************************/

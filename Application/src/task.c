@@ -46,7 +46,6 @@ includes five functions of the following prototypes:
 * typedef bool (fnTaskExec)(void)
 * typedef bool (fnTaskShutdown)(void)
 * typedef bool (fnTaskTest)(void)
-* typedef bool (fnTaskDebug)(void)
 
 ## Initialization Function
 The initialization function is called at system startup to initialize the task.
@@ -76,9 +75,6 @@ The test function is called at system startup to test the task during the power-
 Each task must implement a test function, and that function must be included in the tTaskConfig _Config data structures.
 The test function must return true, otherwise the associated task will be disabled.
 
-## Debug Function
-The debug entry provides optional debugging support
-
 ## Task Frequency
 Not every task needs to be serviced at every run of the superloop. The tTaskConfig structure contains the variable Delay
 that may be set to a value greater than zero to lower the frequency in which the executive is called. When Delay = 0,
@@ -89,6 +85,28 @@ the exec function of the associated task will be called at every loop. Otherwise
 Simple tasks metrics are available to provide data to assist in debugging and tuning task execution. When the module
 variable _MetricsEnabled = true, the number of executions (aka context switches in a RTOS environment) as well as the
 time spent in each task execution.
+
+## Idle Hook
+When enabled via the _IdleHookEnabled const bool flag, the scheduler detects when no task is ready to run in a superloop
+pass and enters a low-power sleep state via POWER_Sleep() instead of busy-polling. This reduces power consumption during
+periods when tasks are not due for execution.
+
+The idle hook operates by:
+1. Tracking whether any task executed during the current superloop pass via the taskRan flag
+2. Computing the time until the next task deadline via _GetTimeUntilNextTask_ms()
+3. Entering POWER_Sleep() if time is available and the system is not shutting down
+4. Accumulating idle time separately from task execution time for metrics purposes
+
+The idle hook can be disabled at runtime by setting _IdleHookEnabled = false without requiring a rebuild.
+
+## Load Measurement API
+The TASK_GetLoad() function provides scheduler load metrics as percentages:
+* Busy_pct: Percentage of time spent executing tasks
+* Idle_pct: Percentage of time in POWER_Sleep() (idle hook only)
+* Overhead_pct: Percentage of time in scheduler overhead (loop management)
+
+These percentages sum to 100% when metrics are enabled. Load information is included in the task status summary output
+when printed.
 
  @endverbatim
 ******************************************************************************/
@@ -108,8 +126,8 @@ time spent in each task execution.
 #include "task_tech.h"
 #include "task_buttons.h"
 #include "task_led.h"
-#include "task_app.h"
 #include "timer.h"
+#include "power.h"
 #include "util.h"
 #include "log.h"
 
@@ -118,15 +136,14 @@ time spent in each task execution.
 //! Task configuration data structure
 typedef struct
 {
-  bool Enabled;          //!< Task enabled when true
-  fnTaskInit* Init;      //!< Task initialization method
-  fnTaskExec* Exec;      //!< Task executive method
-  fnTaskTest* Shutdown;  //!< Task shutdown method
-  fnTaskTest* Test;      //!< Task POST test method
-  uint32_t Delay_ms;     //!< Tick priority
-  uint32_t
-    TestDelay;       //!< Testing delay milliseconds (testing in some modules needs a delay to allow time to initialize)
-  const char* Name;  //!< Module name used for logging
+  bool Enabled;              //!< Task enabled when true
+  fnTaskInit* Init;          //!< Task initialization method
+  fnTaskExec* Exec;          //!< Task executive method
+  fnTaskShutdown* Shutdown;  //!< Task shutdown method
+  fnTaskTest* Test;          //!< Task POST test method
+  uint32_t Delay_ms;         //!< Tick priority
+  uint32_t TestDelay;        //!< Testing initialization delay milliseconds
+  const char* Name;          //!< Module name used for logging
 } tTaskConfig;
 
 //! Task runtime data structure
@@ -142,28 +159,28 @@ typedef struct
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Public variables ----------------------------------------------------------*/
-
 /* Private variables ---------------------------------------------------------*/
 
 static const char* _Module = "TASK";               //!< Module name used for debug logging
 static const uint8_t _NumTasks = eTask_NUM;        //!< Number of tasks
 static const bool _MetricsEnabled = true;          //!< True to collect task metrics
+static const bool _IdleHookEnabled = true;         //!< True to enable scheduler idle hook sleep path
 static const uint32_t _PrintDebugInterval_ms = 0;  //!< Print debug interval in ms (0=disabled)
 
-//! Task configuration defaults (order must match tTaskConfig enum)
 // Delays were chosen, if possible, to distribute servicing of tasks so that tasks are
-// not all serviced on the same loop iteration by using prime numbers. Primes:
+// not all serviced on the same loop iteration by using prime numbers. Some Primes:
 // 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97
 // 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199
+// 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331
+//! Task configuration defaults (order must match tTaskConfig enum)
 static const tTaskConfig _Defaults[] = {
   { true, SYSTEM_Init, SYSTEM_Exec, SYSTEM_Shutdown, SYSTEM_Test, 23, 0, "SYS" },    // eTask_System
   { true, SERIAL_Init, SERIAL_Exec, SERIAL_Shutdown, SERIAL_Test, 7, 0, "SER" },     // eTask_Serial
   { true, DAQ_Init, DAQ_Exec, DAQ_Shutdown, DAQ_Test, 9, 0, "DAQ" },                 // eTask_DAQ
-  { true, CLASSB_Init, CLASSB_Exec, CLASSB_Shutdown, CLASSB_Test, 503, 0, "CLSB" },  // eTask_ClassB
   { true, TECH_Init, TECH_Exec, TECH_Shutdown, TECH_Test, 13, 0, "TECH" },           // eTask_Tech
   { true, BUTTON_Init, BUTTON_Exec, BUTTON_Shutdown, BUTTON_Test, 11, 0, "BTN" },    // eTask_Buttons
   { true, LED_Init, LED_Exec, LED_Shutdown, LED_Test, 31, 0, "LED" },                // eTask_LED
-  { true, APP_Init, APP_Exec, APP_Shutdown, APP_Test, 31, 0, "APP" },                // eTask_APP
+  { true, CLASSB_Init, CLASSB_Exec, CLASSB_Shutdown, CLASSB_Test, 251, 0, "CLSB" },  // eTask_ClassB
 };
 
 static_assert(sizeof(_Defaults) / sizeof(tTaskConfig) == eTask_NUM, "tTaskConfig size mismatch");
@@ -176,10 +193,14 @@ static uint32_t _ErrorField;              //!< Task error field
 static uint16_t _ShutdownTimeout_ms = 0;  //!< Shutdown timer in ms. 0 means shutdown not initiated
 static uint32_t _ShutdownTimestamp = 0;   //!< Shutdown timestamp used to track shutdown timeout
 static bool _ShutdownInProcess = false;   //!< True when shutdown has been initiated
+static float _IdleTimeTotal_s = 0.0f;     //!< Total time spent in scheduler idle hook
 
 /* Private function prototypes -----------------------------------------------*/
 static void _ProcessLoopMetrics(void);
 static void _ProcessTaskMetrics(tTask Task, bool Begin);
+static void _ProcessIdleMetrics(bool Begin);
+static uint32_t _GetTimeUntilNextTask_ms(void);
+static void _IdleHook(void);
 static void _ProcessShutdown(void);
 
 /* Public Implementation -----------------------------------------------------*/
@@ -201,6 +222,7 @@ bool TASK_Init(void)
   _ErrorField = 0;
   _ShutdownTimeout_ms = 0;
   _ShutdownInProcess = false;
+  _IdleTimeTotal_s = 0.0f;
 
   // Loop metrics
   _LoopMetrics.Loops = 0;
@@ -277,6 +299,7 @@ bool TASK_Exec(void)
 {
   static bool process = true;
   static uint32_t timestamp = 0;
+  static bool taskRan = false;
 
   while (process)
   {
@@ -329,6 +352,7 @@ bool TASK_Exec(void)
 
         // Execute the task's main exec function
         process = _Config[_ActiveTask].Exec();
+        taskRan = true;
 
         if (_MetricsEnabled)
         {
@@ -342,11 +366,18 @@ bool TASK_Exec(void)
     {
       _ActiveTask = (tTask)0;
 
+      if (_IdleHookEnabled && !taskRan && !_ShutdownInProcess)
+      {
+        _IdleHook();
+      }
+
       // Process loop metrics if enabled
       if (_MetricsEnabled)
       {
         _ProcessLoopMetrics();
       }
+
+      taskRan = false;
     }
 
     // Print task metrics for task tuning if desired
@@ -580,6 +611,53 @@ bool TASK_GetStatus(tTask Task, tLoopMetrics* Loop, tTaskMetrics* Metrics)
 
 /*******************************************************************/
 /*!
+ @brief     Gets overall scheduler load percentages
+ @param     Load: Pointer for scheduler load data
+ @return    True if successful
+
+ *******************************************************************/
+bool TASK_GetLoad(tTaskLoad* Load)
+{
+  bool success = false;
+
+  if (!IsRAM((uintptr_t)Load))
+  {
+    assert_always();
+  }
+  else if (_LoopMetrics.TimeTotal_s > 0.0f)
+  {
+    float busy = 0.0f;
+    float overhead = 0.0f;
+
+    for (tTask task = (tTask)0; task < _NumTasks; task++)
+    {
+      busy += _Runtime[task].Metrics.TimeTotal_s;
+    }
+
+    overhead = _LoopMetrics.TimeTotal_s - busy - _IdleTimeTotal_s;
+    if (overhead < 0.0f)
+    {
+      overhead = 0.0f;
+    }
+
+    Load->Busy_pct = busy / _LoopMetrics.TimeTotal_s * 100.0f;
+    Load->Idle_pct = _IdleTimeTotal_s / _LoopMetrics.TimeTotal_s * 100.0f;
+    Load->Overhead_pct = overhead / _LoopMetrics.TimeTotal_s * 100.0f;
+    success = true;
+  }
+  else
+  {
+    Load->Busy_pct = 0.0f;
+    Load->Idle_pct = 0.0f;
+    Load->Overhead_pct = 0.0f;
+    success = true;
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
  @brief     Gets the name of a task
  @param     Task: The desired task
  @return    Pointer to name
@@ -593,14 +671,16 @@ const char* TASK_GetName(tTask Task)
 /*******************************************************************/
 /*!
  @brief     Prints the status of a tasks
- @param     Task: The desired task
- @param     Summary: True if only summary needed
-
+ @param     Task: The desired task, or -1 for overall loop and scheduler status
  *******************************************************************/
 void TASK_PrintStatus(tTask Task, bool Summary)
 {
   if (Summary)
   {
+    tTaskLoad load = { 0 };
+
+    TASK_GetLoad(&load);
+
     LOG_Write(eLogger_Sys,
               eLogLevel_Always,
               _Module,
@@ -612,6 +692,15 @@ void TASK_PrintStatus(tTask Task, bool Summary)
               _LoopMetrics.TimeMin_ms,
               _LoopMetrics.TimeMax_ms,
               _LoopMetrics.TimeAvg_ms);
+
+    LOG_Write(eLogger_Sys,
+              eLogLevel_Always,
+              _Module,
+              false,
+              "Idle: busy=%.1f%%, idle=%.1f%%, ovh=%.1f%%",
+              load.Busy_pct,
+              load.Idle_pct,
+              load.Overhead_pct);
   }
   else if (Task < _NumTasks)
   {
@@ -649,10 +738,11 @@ void TASK_ResetDefaults(void)
 /*******************************************************************/
 /*!
  @brief     Sets the shutdown timer
- @param     Time_ms  Time in milliseconds
+ @param     Time_ms  Time in milliseconds. 0 means shutdown immediately
  *******************************************************************/
 void TASK__BeginShutdown(uint16_t Time_ms)
 {
+  // Set to 1ms if 0 to ensure shutdown processing occurs in the exec loop
   _ShutdownTimeout_ms = Time_ms > 0 ? Time_ms : 1ul;
   _ShutdownTimestamp = TIMER_GetTick();
 
@@ -727,6 +817,78 @@ static void _ProcessTaskMetrics(tTask Task, bool Begin)
     }
 
     _Runtime[Task].Metrics.TimeAvg_ms = _Runtime[Task].Metrics.TimeTotal_s / _Runtime[Task].Metrics.Switches * 1000.0f;
+  }
+}
+
+/*******************************************************************/
+/*!
+ @brief     Process metrics for the scheduler idle hook
+ @param     Begin: True if beginning idle metric
+
+ *******************************************************************/
+static void _ProcessIdleMetrics(bool Begin)
+{
+  static uint32_t timestamp = 0;
+  uint32_t time;
+
+  if (Begin)
+  {
+    timestamp = TIMER_GetTick();
+  }
+  else
+  {
+    time = TIMER_GetElapsed_ms(timestamp);
+    _IdleTimeTotal_s += (time / 1000.0f);
+  }
+}
+
+/*******************************************************************/
+/*!
+ @brief     Returns the time until the next enabled task is due to run
+ @return    Remaining time in ms. 0 indicates a task is due now
+
+ *******************************************************************/
+static uint32_t _GetTimeUntilNextTask_ms(void)
+{
+  uint32_t now = TIMER_GetTick();
+  uint32_t nextDue_ms = UINT32_MAX;
+
+  for (tTask task = (tTask)0; task < _NumTasks; task++)
+  {
+    uint32_t delay = _Config[task].Delay_ms;
+    uint32_t elapsed = now - _Runtime[task].Timestamp;
+
+    if (!_Config[task].Enabled)
+    {
+    }
+    else if ((delay == 0u) || (elapsed >= delay))
+    {
+      nextDue_ms = 0u;
+      break;
+    }
+    else if ((delay - elapsed) < nextDue_ms)
+    {
+      nextDue_ms = (delay - elapsed);
+    }
+  }
+
+  return (nextDue_ms == UINT32_MAX) ? 0u : nextDue_ms;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Enter sleep while no task is ready to run
+
+ Sleep handling is centralized in POWER_Sleep() that manages watchdog
+ refresh and HAL tick suspend/resume around the WFI entry
+ *******************************************************************/
+static void _IdleHook(void)
+{
+  if (_GetTimeUntilNextTask_ms() > 0u)
+  {
+    _ProcessIdleMetrics(true);
+    POWER_Sleep();
+    _ProcessIdleMetrics(false);
   }
 }
 

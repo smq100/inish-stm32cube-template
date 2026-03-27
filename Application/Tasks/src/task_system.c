@@ -63,9 +63,6 @@ typedef enum
 } tSystemState;
 
 /* Private define ------------------------------------------------------------*/
-
-#define HEARTBEAT_LED eLED_Status  //!< LED to be used as system heartbeat indicator
-
 /* Private macro -------------------------------------------------------------*/
 /* Public variables ----------------------------------------------------------*/
 
@@ -78,9 +75,11 @@ extern uint32_t _rom_end;    ///< One-past-end of ROM. Defined in the linker scr
 
 static const char* _Module = "T_SYS";                                  ///< Module name to be used for debug logging
 static const uint32_t _ProcessingPeriod_ms[3] = { 100, 1000, 10000 };  ///< System processing periods in milliseconds
+static uint32_t _BootCycles = 0;                           ///< Number of boot cycles since EEPROM was erased
+static tStatusLEDState _StatusLEDState = eStatusLED_Init;  ///< Current status LED state
+static uint8_t _LEDErrorPulseCount = 0;                    // Number of pulses to indicate error code
 static uint32_t _RAM_kb;
 static uint32_t _ROM_kb;
-static uint32_t _BootCycles = 0;  ///< Number of boot cycles since EEPROM was erased
 
 static tSystemState _State = eSystemState_Init1;  //!< System state
 static float _CoreClkFreq = 0.0;                  //!< Core clock freq in Hz
@@ -91,6 +90,7 @@ static uint32_t _HardwareRev = 0;                 //!< Detected HW revision
 static bool _Init1(void);
 static bool _Init2(void);
 static bool _Init3(void);
+static bool _ProcessStatusLED(void);
 static void _ResetRTC(void);
 static uint32_t _GetHardwareRev(void);
 static bool _DAQReadCallback(tDAQ_Entry Entry, uint8_t Item);
@@ -165,6 +165,9 @@ bool SYSTEM_Exec(void)
         // TODO Runtime ClassB test(s) failed
       }
 
+      // Process the status LED for any changes based on system state or faults
+      _ProcessStatusLED();
+
       time[0] = TIMER_GetTick();
     }
 
@@ -224,6 +227,23 @@ bool SYSTEM_Test(void)
 
 /*******************************************************************/
 /*!
+ @brief     Set the status LED state
+ @param     State   Desired status LED state
+ @param     ErrorCode  Error code to indicate if State is eStatusLED_Error
+ @return    None
+ *******************************************************************/
+void SYSTEM_SetStatusLED(tStatusLEDState State, uint8_t ErrorCode)
+{
+  _StatusLEDState = State;
+
+  if (State == eStatusLED_Error)
+  {
+    _LEDErrorPulseCount = ErrorCode;
+  }
+}
+
+/*******************************************************************/
+/*!
  @brief     Factory reset processing. Resets all persistent settings to factory defaults.
  @return    True if successful
  *******************************************************************/
@@ -245,6 +265,7 @@ void SYSTEM_FactoryReset(void)
 /*!
  @brief     Begins the shutdown process for the system.
  @param     Time_ms  Time in milliseconds before shutdown
+ @return    None
  *******************************************************************/
 void SYSTEM__BeginShutdown(uint16_t Time_ms)
 {
@@ -345,6 +366,7 @@ static bool _Init1(void)
 
   _CoreClkFreq = (float)HAL_RCC_GetSysClockFreq();
   _HardwareRev = _GetHardwareRev();
+  _StatusLEDState = eStatusLED_Init;
   _RAM_kb = (uint32_t)(&_ram_end - &_ram_start) * 4u / 1024u;
   _ROM_kb = (uint32_t)(&_rom_end - &_rom_start) * 4u / 1024u;
 
@@ -402,7 +424,7 @@ static bool _Init2(void)
 static bool _Init3(void)
 {
   // Start the heartbeat LED, aka the Happy Light :-)
-  bool ret = LED_Flash(HEARTBEAT_LED, 0.50f, -1, "");
+  SYSTEM_SetStatusLED(eStatusLED_Normal, 0);
 
   LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "CPU ID: %X, Clock: %.2f MHz", SCB->CPUID, _CoreClkFreq / 1e6);
   LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "CPU RAM: %uk, Flash: %uk", _RAM_kb, _ROM_kb);
@@ -417,7 +439,49 @@ static bool _Init3(void)
             "System boot and initialization complete. Boot cycle: %lu",
             _BootCycles);
 
-  return ret;
+  return true;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Processes the status LED
+ @return    True if the status LED state changed
+ *******************************************************************/
+static bool _ProcessStatusLED(void)
+{
+  bool changed = false;
+  static tStatusLEDState state = eStatusLED_Init;
+
+  if (state == _StatusLEDState)
+  {
+    // Nothing new to change
+  }
+  else if (_StatusLEDState == eStatusLED_Bypass)
+  {
+    // Do not change the LED state since something else is controlling it
+  }
+  else if (_StatusLEDState == eStatusLED_Normal)
+  {
+    LED_Flash(eLED_Status, 0.50f, -1, "");
+  }
+  else if (_StatusLEDState == eStatusLED_HeatOn)
+  {
+    LED_Flash(eLED_Status, 0.11f, -1, "");
+  }
+  else if (_StatusLEDState == eStatusLED_Error)
+  {
+    LED_Pulse(eLED_Status, 1.0f, -1, (int32_t)(_LEDErrorPulseCount), "");
+  }
+
+  if (state != _StatusLEDState)
+  {
+    state = _StatusLEDState;
+    changed = true;
+
+    LOG_Write(eLogger_Sys, eLogLevel_Med, _Module, false, "Status LED state changed to: %d", state);
+  }
+
+  return changed;
 }
 
 /*******************************************************************/

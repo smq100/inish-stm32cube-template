@@ -50,14 +50,14 @@
 /* Private macro -------------------------------------------------------------*/
 
 /* Public variables ----------------------------------------------------------*/
-uint32_t CPURunFault = 0;  // Force CPU fault in asm_RuntimeCPUTest when non-zero
-uint32_t RAMRunFault = 0;  // Force RAM fault in asm_TranspRamMarchCXStep when non-zero
+
+uint32_t CPURunFault = 0;  ///< Force CPU fault in asm_RuntimeCPUTest when non-zero
+uint32_t RAMRunFault = 0;  ///< Force RAM fault in asm_TranspRamMarchCXStep when non-zero
 
 /* Private variables ---------------------------------------------------------*/
-static const char* _Module = "CBRT";  //!< Module name for debug logging
+static const char* _Module = "CBRT";  ///< Module name for debug logging
 
-// static CRC_HandleTypeDef _crcHandle = { 0 };
-static bool _IsDebugLoad = false;  //!< Flag to detect debug vs flash load
+static bool _IsDebugLoad = false;  ///< Flag to detect debug vs flash load
 
 /* Private function prototypes -----------------------------------------------*/
 /* Public Implementation -----------------------------------------------------*/

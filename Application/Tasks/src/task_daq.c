@@ -170,11 +170,11 @@ static const tDAQ_Config _Defaults[] = {
     .Name = "rttest" },
 };
 
-static_assert(sizeof(_Defaults) / sizeof(tDAQ_Config) == eDAQ_NUM, "tDAQ_Config size mismatch");
+static_assert(sizeof(_Defaults) / sizeof(tDAQ_Config) == eDAQ_Entry_NUM, "tDAQ_Config size mismatch");
 
 static bool _Initialized = false;             //!< True when module is initialized
-static tDAQ_Config _Config[eDAQ_NUM];         //!< Item configuration
-static tRuntime _Runtime[eDAQ_NUM];           //!< Item runtime data
+static tDAQ_Config _Config[eDAQ_Entry_NUM];   //!< Item configuration
+static tRuntime _Runtime[eDAQ_Entry_NUM];     //!< Item runtime data
 static uint8_t _MaxItems = DAQ_MAX_SUBITEMS;  //!< Maximum number of data items
 
 /* Private function prototypes -----------------------------------------------*/
@@ -196,7 +196,7 @@ bool DAQ_Init(void)
   tDAQ_Config daq;
 
   // Configure with the defaults and initialize
-  for (tDAQ_Entry i = (tDAQ_Entry)0; i < eDAQ_NUM; i++)
+  for (tDAQ_Entry i = (tDAQ_Entry)0; i < eDAQ_Entry_NUM; i++)
   {
     _Config[i] = _Defaults[i];
 
@@ -239,7 +239,7 @@ bool DAQ_Init(void)
  *******************************************************************/
 bool DAQ_Exec(void)
 {
-  for (tDAQ_Entry i = (tDAQ_Entry)0; i < eDAQ_NUM; i++)
+  for (tDAQ_Entry i = (tDAQ_Entry)0; i < eDAQ_Entry_NUM; i++)
   {
     if (!_Config[i].Enabled)
     {
@@ -308,7 +308,7 @@ bool DAQ_RegisterItem(tDAQ_Entry Entry, tDAQ_Config* Config, bool All)
   {
     assert_always();
   }
-  else if (Entry >= eDAQ_NUM)
+  else if (Entry >= eDAQ_Entry_NUM)
   {
     // Should never be here
     assert_always();
@@ -346,7 +346,7 @@ bool DAQ_GetMetadata(tDAQ_Entry Entry, tDAQ_Config* Config)
   {
     assert_always();
   }
-  else if (Entry < eDAQ_NUM)
+  else if (Entry < eDAQ_Entry_NUM)
   {
     *Config = _Config[Entry];
     success = true;
@@ -372,7 +372,7 @@ bool DAQ_GetItem(tDAQ_Entry Entry, uint8_t Item, tDataValue* Value)
   {
     assert_always();
   }
-  else if (Entry >= eDAQ_NUM)
+  else if (Entry >= eDAQ_Entry_NUM)
   {
     // Invalid entry
   }
@@ -402,7 +402,7 @@ bool DAQ_UpdateItem(tDAQ_Entry Entry, uint8_t Item, tDataValue Value)
 {
   bool success = false;
 
-  if (Entry >= eDAQ_NUM)
+  if (Entry >= eDAQ_Entry_NUM)
   {
     // Invalid entry
   }
@@ -432,7 +432,7 @@ bool DAQ_WriteItem(tDAQ_Entry Entry, uint8_t Item, tDataValue Value)
 {
   bool success = false;
 
-  if (Entry >= eDAQ_NUM)
+  if (Entry >= eDAQ_Entry_NUM)
   {
     // Invalid entry
   }

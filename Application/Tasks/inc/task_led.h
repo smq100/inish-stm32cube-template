@@ -41,7 +41,7 @@
 
 typedef enum
 {
-  eLED_Status,  ///< Status LED
+  eLED_Status,  ///< Status LED. Managed by the SYSTEM task. See SYSTEM_SetStatusLED()
   eLED_NUM      // Must be last
 } tLED;
 

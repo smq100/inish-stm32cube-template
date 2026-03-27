@@ -38,6 +38,16 @@
 #include "task.h"
 
 /* Exported types ------------------------------------------------------------*/
+
+typedef enum
+{
+  eStatusLED_Init,    ///< Initial state during system startup
+  eStatusLED_Normal,  ///< Normal operation (heartbeat)
+  eStatusLED_Error,   ///< Error state
+  eStatusLED_Bypass,  ///< Someone else is controlling the LED (e.g. ClassB)
+  eStatusLED_NUM,     ///< Number of status LED states
+} tStatusLEDState;
+
 /* Exported constants --------------------------------------------------------*/
 /* Exported macros ------------------------------------------------------------*/
 /* Exported vars ------------------------------------------------------------ */
@@ -49,6 +59,7 @@ fnTaskExec SYSTEM_Exec;
 fnTaskShutdown SYSTEM_Shutdown;
 fnTaskTest SYSTEM_Test;
 
+void SYSTEM_SetStatusLED(tStatusLEDState State, uint8_t ErrorCode);
 void SYSTEM_FactoryReset(void);
 uint32_t SYSTEM_GetBootCount(void);
 uint32_t SYSTEM_GetUpTime_MS(void);

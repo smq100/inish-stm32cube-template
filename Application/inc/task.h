@@ -43,15 +43,14 @@
 // Tasks dependent on other tasks must be placed after those tasks
 typedef enum
 {
-  eTask_System,   //!< System
-  eTask_Serial,   //!< Serial
-  eTask_DAQ,      //!< DAQ
-  eTask_ClassB,   //!< ClassB
-  eTask_Tech,     //!< Technician
-  eTask_Buttons,  //!< Buttons
-  eTask_LED,      //!< LED
-  eTask_App,      //!< Main application
-  eTask_NUM       //!< Number of tasks. Must be last item
+  eTask_System,   ///< System
+  eTask_Serial,   ///< Serial
+  eTask_DAQ,      ///< DAQ
+  eTask_Tech,     ///< Technician
+  eTask_Buttons,  ///< Buttons
+  eTask_LED,      ///< LED
+  eTask_ClassB,   ///< ClassB
+  eTask_NUM       ///< Number of tasks. Must be last item
 } tTask;
 
 // Metrics for overall loop
@@ -60,11 +59,11 @@ typedef enum
 //       acceptable vs the numerous FLOPs for non-FPU systems
 typedef struct
 {
-  uint64_t Loops;       //!< Quantity of times the loop has completed
-  float TimeTotal_s;    //!< Loop execution time total in seconds
-  uint32_t TimeMin_ms;  //!< Loop execution time min in ms
-  uint32_t TimeMax_ms;  //!< Loop execution time max in ms
-  uint32_t TimeAvg_ms;  //!< Loop execution time avg in ms
+  uint64_t Loops;       ///< Quantity of times the loop has completed
+  float TimeTotal_s;    ///< Loop execution time total in seconds
+  uint32_t TimeMin_ms;  ///< Loop execution time min in ms
+  uint32_t TimeMax_ms;  ///< Loop execution time max in ms
+  uint32_t TimeAvg_ms;  ///< Loop execution time avg in ms
 } tLoopMetrics;
 
 //! Metrics for tasks
@@ -74,14 +73,22 @@ typedef struct
 typedef struct
 {
   // Metrics for each task
-  const char* Name;     //!< Name of task
-  uint32_t Delay_ms;    //!< Delay of task
-  uint64_t Switches;    //!< Quantity of times the process exec function has been called
-  float TimeTotal_s;    //!< Task execution time total in seconds
-  uint32_t TimeMin_ms;  //!< Loop execution time min in ms
-  uint32_t TimeMax_ms;  //!< Loop execution time max in ms
-  uint32_t TimeAvg_ms;  //!< Loop execution time avg in ms
+  const char* Name;     ///< Name of task
+  uint32_t Delay_ms;    ///< Delay of task
+  uint64_t Switches;    ///< Quantity of times the process exec function has been called
+  float TimeTotal_s;    ///< Task execution time total in seconds
+  uint32_t TimeMin_ms;  ///< Loop execution time min in ms
+  uint32_t TimeMax_ms;  ///< Loop execution time max in ms
+  uint32_t TimeAvg_ms;  ///< Loop execution time avg in ms
 } tTaskMetrics;
+
+//! Overall scheduler load percentages based on loop runtime
+typedef struct
+{
+  float Busy_pct;      ///< Time spent inside task Exec methods
+  float Idle_pct;      ///< Time spent in scheduler idle hook
+  float Overhead_pct;  ///< Time spent in scheduler overhead outside tasks and idle
+} tTaskLoad;
 
 //! Task prototypes
 typedef bool(fnTaskInit)(void);
@@ -104,6 +111,7 @@ bool TASK_AreAllInitialized(void);
 bool TASK_AreAllShutdown(void);
 void TASK_SetDelay(tTask Task, uint32_t Delay);
 bool TASK_GetStatus(tTask Task, tLoopMetrics* Loop, tTaskMetrics* Metrics);
+bool TASK_GetLoad(tTaskLoad* Load);
 const char* TASK_GetName(tTask Task);
 void TASK_PrintStatus(tTask Task, bool Summary);
 uint32_t TASK_GetErrorField(void);
