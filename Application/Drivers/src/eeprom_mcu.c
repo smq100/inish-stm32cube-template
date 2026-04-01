@@ -36,10 +36,10 @@
 
 ******************************************************************************/
 
-#define EEPROM_PROTECTED
+#define EEPROM_MCU_PROTECTED
 
 #include "main.h"
-#include "eeprom.h"
+#include "eeprom_mcu.h"
 #include "util.h"
 #include "log.h"
 
@@ -49,52 +49,19 @@
 /* Public variables ----------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
-static const char* _Module = "EEPROM";
+static const char* _Module = "EPRM_M";
+static const uint32_t _BaseAddress = EEPROM_MCU_BASEADDR;
+static const uint32_t _EndAddress = EEPROM_MCU_ENDADDR;
 
 /* Private function prototypes -----------------------------------------------*/
 
+static bool _IsAddressValid(uint32_t Address, uint16_t Length);
+static bool _ReadU32(uint32_t Address, uint32_t* Value);
+static bool _WriteU32(uint32_t Address, uint32_t Value);
 static bool _WriteByte(uint32_t Address, uint8_t Value);
 static bool _GetRegisterAddress(tEEPROM_Register Reg, uint32_t* Address);
 
 /* Public Implementation -----------------------------------------------------*/
-
-/*******************************************************************/
-/*!
- @brief     Checks if an EEPROM address is valid
- @param     address: Absolute target address
- @return    true if in data EEPROM region
- *******************************************************************/
-bool EEPROM_IsAddressValid(uint32_t Address)
-{
-  return ((Address >= EEPROM_BASE_ADDR) && (Address <= EEPROM_END_ADDR));
-}
-
-/*******************************************************************/
-/*!
- @brief     Checks if an EEPROM range is valid
- @param     address: Absolute target address
- @param     length: Number of bytes in range
- @return    true if full range is valid
- *******************************************************************/
-bool EEPROM_IsRangeValid(uint32_t Address, uint32_t Length)
-{
-  bool success = false;
-
-  uint32_t end = Address + Length - 1u;
-
-  if (Length == 0u)
-  {
-  }
-  else if (end < Address)
-  {
-  }
-  else
-  {
-    success = EEPROM_IsAddressValid(Address) && EEPROM_IsAddressValid(end);
-  }
-
-  return success;
-}
 
 /*******************************************************************/
 /*!
@@ -104,7 +71,7 @@ bool EEPROM_IsRangeValid(uint32_t Address, uint32_t Length)
  @param     length: Number of bytes to read
  @return    true if successful
  *******************************************************************/
-bool EEPROM_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
+bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
 {
   bool success = false;
 
@@ -112,7 +79,7 @@ bool EEPROM_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
   {
     assert_always();
   }
-  else if (!EEPROM_IsRangeValid(Address, Length))
+  else if (!_IsAddressValid(Address, Length))
   {
   }
   else
@@ -141,7 +108,7 @@ bool EEPROM_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
  @param     length: Number of bytes to write
  @return    true if successful
  *******************************************************************/
-bool EEPROM_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
+bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
 {
   bool success = false;
 
@@ -149,7 +116,7 @@ bool EEPROM_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
   {
     assert_always();
   }
-  else if (!EEPROM_IsRangeValid(Address, Length))
+  else if (!_IsAddressValid(Address, Length))
   {
   }
   else if (HAL_FLASHEx_DATAEEPROM_Unlock() != HAL_OK)
@@ -173,72 +140,7 @@ bool EEPROM_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
 
   if (!success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to read EEPROM address 0x%08X", Address);
-  }
-
-  return success;
-}
-
-/*******************************************************************/
-/*!
- @brief     Sets entire data EEPROM bank to 0xFF
- @param     RegsOnly: If true, erase only registers, otherwise erase entire EEPROM
- @return    true if successful
- *******************************************************************/
-bool EEPROM_Erase(bool RegsOnly)
-{
-  bool success = true;
-
-  if (RegsOnly)
-  {
-    // Clear regs to zeros (will be 0xFF after full erase, but more appropriate to work with zeros as regs)
-    for (tEEPROM_Register i = 0; i < eEEPROM_Reg_NUM; i++)
-    {
-      if (!EEPROM_WriteReg(i, 0u))
-      {
-        success = false;
-        break;
-      }
-    }
-  }
-  else
-  {
-    if (HAL_FLASHEx_DATAEEPROM_Unlock() == HAL_OK)
-    {
-      for (uint32_t address = EEPROM_BASE_ADDR; address <= EEPROM_END_ADDR; address += 4u)
-      {
-        if (HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, address, 0xFFFFFFFFu) != HAL_OK)
-        {
-          success = false;
-          break;
-        }
-      }
-
-      if (success)
-      {
-        success = (HAL_FLASHEx_DATAEEPROM_Lock() == HAL_OK);
-
-        if (success)
-        {
-          // Recursive call to clear regs to zeros
-          success = EEPROM_Erase(true);
-        }
-        else
-        {
-          // If we failed to erase, attempt to lock anyway (recursive call) to avoid leaving EEPROM unlocked
-          assert_always();
-        }
-      }
-    }
-    else
-    {
-      success = false;
-    }
-  }
-
-  if (!success)
-  {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Error erasing EEPROM (RegsOnly=%u)", RegsOnly);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to write EEPROM address 0x%08X", Address);
   }
 
   return success;
@@ -251,18 +153,23 @@ bool EEPROM_Erase(bool RegsOnly)
  @param     value: Output value
  @return    true if successful
  *******************************************************************/
-bool EEPROM_ReadReg(tEEPROM_Register Reg, uint32_t* Value)
+bool EEPROM_MCU_ReadReg(tEEPROM_Register Reg, uint32_t* Value)
 {
   bool success = false;
   uint32_t address = 0u;
 
   if (_GetRegisterAddress(Reg, &address))
   {
-    success = EEPROM_ReadU32(address, Value);
+    success = _ReadU32(address, Value);
   }
 
-  if (!success)
+  if (success)
   {
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "Read EEPROM reg %u: 0x%08X", Reg, *Value);
+  }
+  else
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to read EEPROM register %u", Reg);
     *Value = 0u;
   }
 
@@ -276,14 +183,23 @@ bool EEPROM_ReadReg(tEEPROM_Register Reg, uint32_t* Value)
  @param     value: Value to write
  @return    true if successful
  *******************************************************************/
-bool EEPROM_WriteReg(tEEPROM_Register Reg, uint32_t Value)
+bool EEPROM_MCU_WriteReg(tEEPROM_Register Reg, uint32_t Value)
 {
   bool success = false;
   uint32_t address = 0u;
 
   if (_GetRegisterAddress(Reg, &address))
   {
-    success = EEPROM_WriteU32(address, Value);
+    success = _WriteU32(address, Value);
+  }
+
+  if (success)
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "Wrote EEPROM reg %u: 0x%08X", Reg, Value);
+  }
+  else
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to write EEPROM register %u", Reg);
   }
 
   return success;
@@ -295,18 +211,110 @@ bool EEPROM_WriteReg(tEEPROM_Register Reg, uint32_t Value)
  @param     reg: Register index
  @return    true if successful
  *******************************************************************/
-bool EEPROM_IncrementReg(tEEPROM_Register Reg)
+bool EEPROM_MCU_IncrementReg(tEEPROM_Register Reg)
 {
   bool success = false;
   uint32_t value = 0u;
 
-  if (EEPROM_ReadReg(Reg, &value))
+  if (EEPROM_MCU_ReadReg(Reg, &value))
   {
     value = (value == UINT32_MAX) ? 1u : (value + 1u);
-    success = EEPROM_WriteReg(Reg, value);
+    success = EEPROM_MCU_WriteReg(Reg, value);
   }
 
   return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Sets entire data EEPROM bank to 0xFF
+ @param     RegsOnly: If true, erase only registers, otherwise erase entire EEPROM
+ @return    true if successful
+ *******************************************************************/
+bool EEPROM_MCU_Erase(bool RegsOnly)
+{
+  bool success = true;
+
+  LOG_WriteDirect(eLogger_Sys,
+                  eLogLevel_High,
+                  _Module,
+                  false,
+                  "Erasing EEPROM (%s)...",
+                  RegsOnly ? "registers only" : "entire EEPROM");
+
+  if (RegsOnly)
+  {
+    // Clear regs to zeros (will be 0xFF after full erase, but more appropriate to work with zeros as regs)
+    for (tEEPROM_Register i = 0; i < eEEPROM_Reg_NUM; i++)
+    {
+      if (!EEPROM_MCU_WriteReg(i, 0u))
+      {
+        success = false;
+        break;
+      }
+    }
+
+    if (success)
+    {
+      LOG_Write(eLogger_Sys, eLogLevel_Med, _Module, false, "Cleared EEPROM registers");
+    }
+    else
+    {
+      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Error clearing EEPROM registers");
+    }
+  }
+  else
+  {
+    if (HAL_FLASHEx_DATAEEPROM_Unlock() == HAL_OK)
+    {
+      for (uint32_t address = _BaseAddress; address <= _EndAddress; address += 4u)
+      {
+        if (HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, address, 0xFFFFFFFFu) != HAL_OK)
+        {
+          success = false;
+          break;
+        }
+      }
+
+      LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Erased entire EEPROM");
+
+      if (success)
+      {
+        success = (HAL_FLASHEx_DATAEEPROM_Lock() == HAL_OK);
+
+        if (success)
+        {
+          // Recursive call to clear regs to zeros
+          success = EEPROM_MCU_Erase(true);
+        }
+        else
+        {
+          // If we failed to erase, attempt to lock anyway (recursive call) to avoid leaving EEPROM unlocked
+          LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Error erasing EEPROM");
+          assert_always();
+        }
+      }
+    }
+    else
+    {
+      success = false;
+    }
+  }
+
+  return success;
+}
+
+/* Private Implementation ----------------------------------------------------*/
+
+/*******************************************************************/
+/*!
+ @brief     Checks if an EEPROM address is valid
+ @param     address: Absolute target address
+ @return    true if in data EEPROM region
+ *******************************************************************/
+static bool _IsAddressValid(uint32_t Address, uint16_t Length)
+{
+  return ((Address >= _BaseAddress) && ((Address + Length - 1) <= _EndAddress));
 }
 
 /*******************************************************************/
@@ -316,7 +324,7 @@ bool EEPROM_IncrementReg(tEEPROM_Register Reg)
  @param     value: Output value
  @return    true if successful
  *******************************************************************/
-bool EEPROM_ReadU32(uint32_t Address, uint32_t* Value)
+static bool _ReadU32(uint32_t Address, uint32_t* Value)
 {
   bool success = false;
   uint8_t buf[4];
@@ -325,7 +333,7 @@ bool EEPROM_ReadU32(uint32_t Address, uint32_t* Value)
   {
     assert_always();
   }
-  else if (EEPROM_Read(Address, buf, sizeof(buf)))
+  else if (EEPROM_MCU_Read(Address, buf, sizeof(buf)))
   {
     *Value = ((uint32_t)buf[0]) | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
     success = true;
@@ -341,7 +349,7 @@ bool EEPROM_ReadU32(uint32_t Address, uint32_t* Value)
  @param     value: Value to write
  @return    true if successful
  *******************************************************************/
-bool EEPROM_WriteU32(uint32_t Address, uint32_t Value)
+static bool _WriteU32(uint32_t Address, uint32_t Value)
 {
   uint8_t buf[4];
 
@@ -350,10 +358,8 @@ bool EEPROM_WriteU32(uint32_t Address, uint32_t Value)
   buf[2] = (uint8_t)((Value >> 16) & 0xFFu);
   buf[3] = (uint8_t)((Value >> 24) & 0xFFu);
 
-  return EEPROM_Write(Address, buf, sizeof(buf));
+  return EEPROM_MCU_Write(Address, buf, sizeof(buf));
 }
-
-/* Private Implementation ----------------------------------------------------*/
 
 /*******************************************************************/
 /*!
@@ -397,13 +403,10 @@ static bool _GetRegisterAddress(tEEPROM_Register Reg, uint32_t* Address)
   }
   else
   {
-    uint32_t regAddress = EEPROM_BASE_ADDR + (((uint32_t)Reg) * sizeof(uint32_t));
+    uint32_t regAddress = _BaseAddress + (((uint32_t)Reg) * sizeof(uint32_t));
+    *Address = regAddress;
 
-    if (EEPROM_IsRangeValid(regAddress, sizeof(uint32_t)))
-    {
-      *Address = regAddress;
-      success = true;
-    }
+    success = true;
   }
 
   return success;

@@ -38,16 +38,20 @@
 #include "common.h"
 
 /* Exported types ------------------------------------------------------------*/
+
 /* Exported constants --------------------------------------------------------*/
+
 /* Exported macros ------------------------------------------------------------*/
+
 /* Exported vars ------------------------------------------------------------ */
+
 /* Exported functions ------------------------------------------------------- */
 
 bool UART_Init(tSerialPort Port, const UART_HandleTypeDef* Handle);
 bool UART_IsTxReady(tSerialPort Port);
 bool UART_SendByte(tSerialPort Port, uint8_t Byte);
 bool UART_GetByte(tSerialPort Port, uint8_t* Data);
-bool UART_SendString(tSerialPort Port, const char* Str);
+bool UART_SendString(tSerialPort Port, const char* Str, bool Direct);
 int32_t UART_SendPacket(tSerialPort Port, uint8_t* Packet, uint32_t Size);
 int32_t UART_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint8_t Size);
 void UART_ClearQueues(tSerialPort Port);

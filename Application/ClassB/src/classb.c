@@ -43,7 +43,7 @@
 #include "classb_params.h"
 #include "log.h"
 #include "util.h"
-#include "eeprom.h"
+#include "eeprom_mcu.h"
 #include "timer.h"
 #include "iwdg.h"
 #include "task_led.h"
@@ -586,13 +586,13 @@ void ClassB_PrintErrorCounts(void)
   uint32_t stack_errors = 0;
   uint32_t flow_errors = 0;
 
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_CPU, &cpu_errors);
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_RAM, &ram_errors);
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_CRC, &crc_errors);
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_CLK, &clk_errors);
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_WDG, &wdg_errors);
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_Stack, &stack_errors);
-  EEPROM_ReadReg(eEEPROM_Reg_ClassBError_Flow, &flow_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CPU, &cpu_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_RAM, &ram_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CRC, &crc_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CLK, &clk_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_WDG, &wdg_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_Stack, &stack_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_Flow, &flow_errors);
 
   LOG_Write(eLogger_Sys,
             eLogLevel_High,

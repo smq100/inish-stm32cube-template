@@ -37,6 +37,7 @@
 #include "main.h"
 #include "uart.h"
 #include "util.h"
+#include "timer.h"
 #include "task_serial.h"
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,7 +65,9 @@ typedef struct
 #define BUFFER_UART_TX_SZ 1
 
 /* Private macro -------------------------------------------------------------*/
+
 /* Public variables ----------------------------------------------------------*/
+
 /* Private variables ---------------------------------------------------------*/
 
 //! UART configuration
@@ -149,7 +152,11 @@ bool UART_SendByte(tSerialPort Port, uint8_t Byte)
 {
   bool success = false;
 
-  if (_Runtime[Port].Initialized)
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+    assert_always();
+  }
+  else if (_Runtime[Port].Initialized)
   {
     _TxCharBuffer[Port][0] = Byte;
     success = HAL_UART_Transmit_IT((UART_HandleTypeDef*)_Runtime[Port].Handle, _TxCharBuffer[Port], 1);
@@ -179,17 +186,43 @@ bool UART_GetByte(tSerialPort Port, uint8_t* Data)
  @brief     Send string over UARTx
  @param     port: The desired port
  @param     Str: the string to be sent
+ @param     Direct: when true, send the string directly without the UART ISR
  *******************************************************************/
-bool UART_SendString(tSerialPort Port, const char* Str)
+bool UART_SendString(tSerialPort Port, const char* Str, bool Direct)
 {
   HAL_StatusTypeDef ret = HAL_ERROR;
 
-  if (!IsPointerValid((uintptr_t)Str))
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+    assert_always();
+  }
+  else if (!_Runtime[Port].Initialized)
+  {
+    assert_always();
+  }
+  else if (_Runtime[Port].Error > 0)
+  {
+    // Not yet, please
+  }
+  else if (!IsPointerValid((uintptr_t)Str))
   {
     assert_always();
   }
   else if (*Str == '\0')
   {
+  }
+  else if (Direct)
+  {
+    uint32_t start = TIMER_GetTick();
+    while (!UART_IsTxReady(Port) && (TIMER_GetElapsed_ms(start) < 100u))
+    {
+      // Wait for ready with timeout to avoid blocking indefinitely
+    }
+
+    if (UART_IsTxReady(Port))
+    {
+      ret = HAL_UART_Transmit((UART_HandleTypeDef*)_Runtime[Port].Handle, (const uint8_t*)Str, strlen(Str), 500u);
+    }
   }
   else
   {
@@ -211,7 +244,11 @@ int32_t UART_SendPacket(tSerialPort Port, uint8_t* Packet, uint32_t Size)
 {
   HAL_StatusTypeDef ret = HAL_ERROR;
 
-  if (!IsPointerValid((uintptr_t)Packet))
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+    assert_always();
+  }
+  else if (!IsPointerValid((uintptr_t)Packet))
   {
     assert_always();
   }
@@ -237,10 +274,12 @@ int32_t UART_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint8_t Size)
   UNUSED(Packet);
 
   int i;
-
-  for (i = 0; i < Size; i++)
+  if (Port < NUM_SERIAL_PORTS)
   {
-    // TODO
+    for (i = 0; i < Size; i++)
+    {
+      // TODO
+    }
   }
 
   return i;

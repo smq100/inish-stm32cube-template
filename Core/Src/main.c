@@ -21,6 +21,7 @@
 #include "adc.h"
 #include "crc.h"
 #include "dma.h"
+#include "i2c.h"
 #include "iwdg.h"
 #include "rtc.h"
 #include "tim.h"
@@ -122,6 +123,7 @@ int main(void)
   MX_RTC_Init();
   MX_TIM4_Init();
   MX_ADC_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   _iwdg_init_done = true;
 

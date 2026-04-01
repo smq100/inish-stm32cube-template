@@ -90,7 +90,7 @@ bool POWER_Init(void)
 *******************************************************************/
 void POWER_Sleep(void)
 {
-  // Use TIM10 counter which keeps running during sleep
+  // Use TIM11 counter which keeps running during sleep
 
   // Get timestamp before sleep. Have to use tim4 because systicks are suspended
   uint32_t sleep_tic = __HAL_TIM_GET_COUNTER(&htim4);
@@ -128,7 +128,7 @@ void POWER_Sleep(void)
 
 /*******************************************************************/
 /*!
- @brief  Cause a quick, self-limited sleep using internal timer (TIM10)
+ @brief  Cause a quick, self-limited sleep using internal timer (TIM11)
  @param  Usec   micro-seconds to sleep for (capped to ~32.7ms to stay below 16-bit timer rollover)
  @param  Sleep  true to actually sleep, false to just wait
  @retval None

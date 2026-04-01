@@ -31,8 +31,8 @@
 
 ******************************************************************************/
 
-#ifndef __EEPROM_H
-#define __EEPROM_H
+#ifndef __EEPROM_MCU_H
+#define __EEPROM_MCU_H
 
 #include "main.h"
 #include "common.h"
@@ -63,34 +63,29 @@ typedef enum
 
 /* Exported constants --------------------------------------------------------*/
 
-#define EEPROM_BASE_ADDR FLASH_EEPROM_BASE                           ///< 0x08080000
-#define EEPROM_END_ADDR FLASH_EEPROM_END                             ///< 0x08081FFF
-#define EEPROM_SIZE_BYTES (EEPROM_END_ADDR - EEPROM_BASE_ADDR + 1u)  ///< 8192 bytes
+#define EEPROM_MCU_BASEADDR FLASH_EEPROM_BASE                                  ///< 0x08080000
+#define EEPROM_MCU_ENDADDR FLASH_EEPROM_END                                    ///< 0x08081FFF
+#define EEPROM_MCU_SIZE_BYTES (EEPROM_MCU_ENDADDR - EEPROM_MCU_BASEADDR + 1u)  ///< 8192 bytes
 
-#define EEPROM_MODEL_TABLE_ADDR (EEPROM_BASE_ADDR + 0x200u)  ///< Start of model table in EEPROM (after registers)
+#define EEPROM_MODEL_TABLE_ADDR (EEPROM_MCU_BASEADDR + 0x200u)  ///< Start of model table in EEPROM (after registers)
 
 /* Exported macros ------------------------------------------------------------*/
+
 /* Exported vars ------------------------------------------------------------ */
+
 /* Exported functions ------------------------------------------------------- */
 
-bool EEPROM_IsAddressValid(uint32_t Address);
-bool EEPROM_IsRangeValid(uint32_t Address, uint32_t Length);
+bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length);
+bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length);
+bool EEPROM_MCU_ReadReg(tEEPROM_Register Reg, uint32_t* Value);
+bool EEPROM_MCU_WriteReg(tEEPROM_Register Reg, uint32_t Value);
+bool EEPROM_MCU_IncrementReg(tEEPROM_Register Reg);
+bool EEPROM_MCU_Erase(bool RegsOnly);
 
-bool EEPROM_Read(uint32_t Address, uint8_t* Data, uint32_t Length);
-bool EEPROM_Write(uint32_t Address, const uint8_t* Data, uint32_t Length);
-bool EEPROM_Erase(bool RegsOnly);
-
-bool EEPROM_ReadReg(tEEPROM_Register Reg, uint32_t* Value);
-bool EEPROM_WriteReg(tEEPROM_Register Reg, uint32_t Value);
-bool EEPROM_IncrementReg(tEEPROM_Register Reg);
-
-bool EEPROM_ReadU32(uint32_t Address, uint32_t* Value);
-bool EEPROM_WriteU32(uint32_t Address, uint32_t Value);
-
-#ifdef EEPROM_PROTECTED
+#ifdef EEPROM_MCU_PROTECTED
 
 /* Protected functions ------------------------------------------------------ */
 
-#endif /* EEPROM_PROTECTED */
+#endif /* EEPROM_MCU_PROTECTED */
 
-#endif /* __EEPROM_H */
+#endif /* __EEPROM_MCU_H */

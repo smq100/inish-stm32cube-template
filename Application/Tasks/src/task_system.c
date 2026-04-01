@@ -45,9 +45,9 @@
 #include "timer.h"
 #include "version.h"
 #include "rtc.h"
-#include "eeprom.h"
+#include "eeprom_mcu.h"
+#include "eeprom_ext.h"
 #include "util.h"
-#include "app_adc.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -174,8 +174,6 @@ bool SYSTEM_Exec(void)
     // Med frequency processing
     if (TIMER_GetElapsed_ms(time[1]) > _ProcessingPeriod_ms[1])
     {
-      ADC_Refresh();
-
       time[1] = TIMER_GetTick();
     }
 
@@ -245,16 +243,23 @@ void SYSTEM_SetStatusLED(tStatusLEDState State, uint8_t ErrorCode)
 /*******************************************************************/
 /*!
  @brief     Factory reset processing. Resets all persistent settings to factory defaults.
- @return    True if successful
+ @return    None
  *******************************************************************/
 void SYSTEM_FactoryReset(void)
 {
+  // Reset the system logs (which also resets the log index in EXT EEPROM)
+  LOG_Reset(eLogger_Sys, true);
+  LOG_Reset(eLogger_Tech, false);
+
   // Reset the regs only (don't reset the entire EEPROM)
-  EEPROM_Erase(true);
+  EEPROM_MCU_Erase(true);
+
+  // Reset the external EEPROM (where logs are stored) to all 0xFF to indicate empty
+  EEPROM_EXT_Erase();
 
   // Reset the first byte of the model table to force model validation fails reset defaults on next boot
   uint8_t ff = 0xFF;
-  EEPROM_Write(EEPROM_MODEL_TABLE_ADDR, &ff, 1);
+  EEPROM_MCU_Write(EEPROM_MODEL_TABLE_ADDR, &ff, 1);
 
   LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, true, "Factory reset initiated");
 
@@ -382,9 +387,9 @@ static bool _Init1(void)
     TIMER_RegisterTickGetter(SYSTEM_GetTick);
 
     // Persistent boot-cycle counter stored in data EEPROM reg0
-    if (EEPROM_IncrementReg(eEEPROM_Reg_BootCount))
+    if (EEPROM_MCU_IncrementReg(eEEPROM_Reg_BootCount))
     {
-      success = EEPROM_ReadReg(eEEPROM_Reg_BootCount, &_BootCycles);
+      success = EEPROM_MCU_ReadReg(eEEPROM_Reg_BootCount, &_BootCycles);
     }
   }
 
@@ -402,8 +407,6 @@ static bool _Init2(void)
 
   if (POWER_Init())
   {
-    ADC_Init();
-
     // Register DAQ items
     tDAQ_Config daq;
     daq.CallbackRead = _DAQReadCallback;
@@ -423,7 +426,7 @@ static bool _Init2(void)
  *******************************************************************/
 static bool _Init3(void)
 {
-  // Start the heartbeat LED, aka the Happy Light :-)
+  // Start the normal heartbeat LED, aka the Happy Light :-)
   SYSTEM_SetStatusLED(eStatusLED_Normal, 0);
 
   LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "CPU ID: %X, Clock: %.2f MHz", SCB->CPUID, _CoreClkFreq / 1e6);
@@ -463,10 +466,6 @@ static bool _ProcessStatusLED(void)
   else if (_StatusLEDState == eStatusLED_Normal)
   {
     LED_Flash(eLED_Status, 0.50f, -1, "");
-  }
-  else if (_StatusLEDState == eStatusLED_HeatOn)
-  {
-    LED_Flash(eLED_Status, 0.11f, -1, "");
   }
   else if (_StatusLEDState == eStatusLED_Error)
   {
@@ -527,13 +526,12 @@ static uint32_t _GetHardwareRev(void)
 static bool _DAQReadCallback(tDAQ_Entry Entry, uint8_t Item)
 {
   tDataValue value;
-  bool success = false;
+  bool success = true;
 
   if (Entry == eDAQ_Uptime)
   {
     value.U32 = SYSTEM_GetTick();
     DAQ_UpdateItem(Entry, Item, value);
-    success = true;
   }
 
   return success;

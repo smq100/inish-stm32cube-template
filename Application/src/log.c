@@ -31,30 +31,37 @@
 
  ******************************************************************************/
 
-#include "main.h"
-
 #include <stdarg.h>
 
+#include "main.h"
 #include "log.h"
 #include "task_serial.h"
 #include "task_system.h"
-#include "eeprom.h"
+#include "eeprom_mcu.h"
+#include "eeprom_ext.h"
 #include "timer.h"
+#include "uart.h"
 #include "util.h"
+
+#ifdef TEST__ENABLE_LOGGING
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
+
+#define MAX_CACHE_LOGS 16u    //!< The max cache entries. Use minimum needed. Chews up a lot of RAM for each entry.
+#define MAX_EEPROM_LOGS 128u  //!< The max entries to store in external EEPROM memory. 0=disabled
+
 /* Private macro -------------------------------------------------------------*/
 /* Public variables ----------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
 static const char* _Module = "LOG";                      //!< Name of the module. Used for debug logging
 static const float _BlackoutS[eLogger_NUM] = { -1.0f };  //!< Blackout period in seconds (< 0.0f = blackout disabled)
-static const uint32_t _LenMsg = MAX_DEBUGLOG_CHARS_MSG - 1;     // The max allowed chars of payload msg
-static const uint32_t _LenTot = MAX_DEBUGLOG_CHARS_TOT - 1;     // The max allowed chars in a debug log line
-static const uint32_t _CacheSize = CACHE_ENTRIES_MAX;           // The number of cache entries
-static const uint32_t _EEPROMSize = PERSIST_ENTRIES_MAX;        // The number of EEPROM entries
-static const bool _PersistEnabled = (PERSIST_ENTRIES_MAX > 0);  //!< logs stored in non-volatile memory when desired
+static const uint32_t _LenMsg = MAX_DEBUGLOG_CHARS_MSG - 1;   // The max allowed chars of payload msg
+static const uint32_t _LenTot = MAX_DEBUGLOG_CHARS_TOT - 1;   // The max allowed chars in a debug log line
+static const uint32_t _CacheMax = MAX_CACHE_LOGS;             // The number of cache entries
+static const uint32_t _ExternalLogMax = MAX_EEPROM_LOGS;      // The number of EEPROM log entries
+static const bool _ExtEEPROMenabled = (MAX_EEPROM_LOGS > 0);  //!< logs stored in non-volatile memory when desired
 
 // clang-format off
 //! Names of the log levels
@@ -80,17 +87,15 @@ static uint32_t _Blackout[eLogger_NUM];                     ///< Blackout incomi
 static uint32_t _Progress[eLogger_NUM];                     ///< Progress when printing progress chars
 static uint32_t _ExternalLogIndex = 0;                      ///< Index for next external log entry EEPROM
 
-static char _Cache[eLogger_NUM][CACHE_ENTRIES_MAX][MAX_DEBUGLOG_CHARS_TOT] = { { { '\0' } } };
+static char _Cache[eLogger_NUM][MAX_CACHE_LOGS][MAX_DEBUGLOG_CHARS_TOT] = { { { '\0' } } };
 static uint32_t _CacheIndex[eLogger_NUM] = { 0 };
 static uint32_t _CacheCount[eLogger_NUM] = { 0 };
 
 /* Private function prototypes -----------------------------------------------*/
 
-#ifdef TEST__ENABLE_LOGGING
-
 static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, const char* Output);
-static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, const char* Output);
-static bool _UpdateLogs(tLogger Logger, char* Output);
+static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, bool Direct, const char* Output);
+static bool _UpdateLog(tLogger Logger, char* Output);
 
 /* Public Implementation -----------------------------------------------------*/
 
@@ -113,17 +118,17 @@ bool LOG_Init(tLogger Logger, tSerialPort Port, tLogLevel Level, bool Enabled)
   // Clear cache
   _CacheIndex[Logger] = 0;
   _CacheCount[Logger] = 0;
-  for (uint32_t i = 0; i < CACHE_ENTRIES_MAX; i++)
+  for (uint32_t i = 0; i < MAX_CACHE_LOGS; i++)
   {
     _Cache[Logger][i][0] = '\0';
   }
 
   // Get the next log index from EEPROM
-  EEPROM_ReadReg(eEEPROM_Reg_LogIndex, &_ExternalLogIndex);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_LogIndex, &_ExternalLogIndex);
 
   if (SERIAL_IsEnabled(Port))
   {
-    LOG_Reset(Logger);
+    LOG_Reset(Logger, false);
 
     if (Level < eLogLevel_NUM)
     {
@@ -132,7 +137,7 @@ bool LOG_Init(tLogger Logger, tSerialPort Port, tLogLevel Level, bool Enabled)
 
     _Initialized[Logger] = true;
 
-    LOG_Write(Logger, eLogLevel_High, _Module, false, "Initialized (%u)", Logger);
+    LOG_Write(Logger, eLogLevel_High, _Module, false, "Initialized (%u), EXT logs: %u", Logger, _ExternalLogIndex);
   }
 
   return _Initialized[Logger];
@@ -186,7 +191,45 @@ bool LOG_Write(tLogger Logger, tLogLevel Level, const char* Module, bool Persist
     vsnprintf(output, _LenMsg, Fmt, args);
     va_end(args);
 
-    success = _Output(Logger, Level, Module, Persist, output);
+    success = _Output(Logger, Level, Module, Persist, false, output);
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Writes a log directly to the UART bypassing any task_serial queuing
+ @param     Logger: The desired logger
+ @param     Level: The desired level
+ @param     Persist: When true, log is stored in non-volatile memory
+ @param     Module: The module name issuing the log
+ @param     Fmt: The log string
+ @param     ...: Additional arguments for formatting the log string
+ @return    True if successful
+
+*******************************************************************/
+bool LOG_WriteDirect(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, const char* Fmt, ...)
+{
+  char output[MAX_DEBUGLOG_CHARS_TOT];
+  bool success = false;
+
+  if (!IsPointerValid((uintptr_t)Module))
+  {
+    assert_always();
+  }
+  else if (!IsPointerValid((uintptr_t)Fmt))
+  {
+    assert_always();
+  }
+  else
+  {
+    va_list args;
+    va_start(args, Fmt);
+    vsnprintf(output, _LenMsg, Fmt, args);
+    va_end(args);
+
+    success = _Output(Logger, Level, Module, Persist, true, output);
   }
 
   return success;
@@ -217,8 +260,8 @@ uint32_t LOG_GetCachedEntry(tLogger Logger, uint32_t Index, char* Buffer)
   }
   else
   {
-    uint32_t latest = (_CacheIndex[Logger] + _CacheSize - 1u) % _CacheSize;
-    uint32_t cache_idx = (latest + _CacheSize - Index) % _CacheSize;
+    uint32_t latest = (_CacheIndex[Logger] + _CacheMax - 1u) % _CacheMax;
+    uint32_t cache_idx = (latest + _CacheMax - Index) % _CacheMax;
     char* entry = _Cache[Logger][cache_idx];
     strncpy(Buffer, entry, _LenTot);
     Buffer[strlen(entry)] = '\0';
@@ -238,13 +281,13 @@ uint32_t LOG_GetCachedEntry(tLogger Logger, uint32_t Index, char* Buffer)
  *******************************************************************/
 bool LOG_Print(tLogger Logger, const char* Output, bool Linefeed)
 {
-  char text[MAX_DEBUGLOG_CHARS_TOT];
+  char output[MAX_DEBUGLOG_CHARS_TOT];
   bool success = false;
 
   if (Output != NULLPTR)
   {
-    strcpy(text, Output);
-    success = SERIAL_SendString(_Port[Logger], text);
+    strcpy(output, Output);
+    success = SERIAL_SendString(_Port[Logger], output);
 
     if (Linefeed && success)
     {
@@ -262,14 +305,21 @@ bool LOG_Print(tLogger Logger, const char* Output, bool Linefeed)
  @return     None
 
  *******************************************************************/
-void LOG_Reset(tLogger Logger)
+void LOG_Reset(tLogger Logger, bool ClearEEPROM)
 {
   _Level[Logger] = LOGGING_DEFAULT_LEVEL;
   _Timestamp[Logger] = 0;
   _Blackout[Logger] = 0;
   _Progress[Logger] = 0;
 
-  LOG_Write(Logger, eLogLevel_Low, _Module, false, "Reset");
+  if (Logger == eLogger_Sys)
+  {
+    if (ClearEEPROM)
+    {
+      _ExternalLogIndex = 0;
+      EEPROM_MCU_WriteReg(eEEPROM_Reg_LogIndex, _ExternalLogIndex);
+    }
+  }
 }
 
 /*******************************************************************/
@@ -339,7 +389,7 @@ bool LOG_Progress(tLogger Logger, tLogLevel Level, const char* Module, char Dot)
   else
   {
     // Start a new line
-    success = _Output(Logger, Level, Module, false, "Starting progress bar: ");
+    success = _Output(Logger, Level, Module, false, false, "Starting progress bar: ");
     _Progress[Logger]++;
   }
 
@@ -355,31 +405,26 @@ bool LOG_Progress(tLogger Logger, tLogLevel Level, const char* Module, char Dot)
  @param     Level: The desired level
  @param     Module: The module name issuing the log
  @param     Persist: When true, log is stored in non-volatile memory
+ @param     Direct: When true, the Output is sent directly to the UART without queuing
  @param     Output: The log string
  @param     Analysis: Bare output when true
  @return    True if output is sent
 
  *******************************************************************/
-static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, const char* Output)
+static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, bool Direct, const char* Output)
 {
-  char text[MAX_DEBUGLOG_CHARS_TOT];
+  char output[MAX_DEBUGLOG_CHARS_TOT];
   float uptime_s;
   bool proceed = false;
 
   // Send the output atomically using two methods
-  if (!_Initialized[Logger])
-  {
-  }
-  else if (!_Enabled[Logger])
-  {
-  }
-  else if (_WillPrint(Logger, Level, Module, Output))
+  if (_WillPrint(Logger, Level, Module, Output))
   {
     // Determine if we want to print the output based on id and timeout
     if (TIMER_GetElapsed_s(_Timestamp[Logger]) > _BlackoutS[Logger])
     {
       // Blackout expired. Print and reset timer
-      strcat(text, " ***");
+      strcat(output, " ***");
       _Timestamp[Logger] = TIMER_GetTick();
       proceed = true;
     }
@@ -393,7 +438,7 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
       // Prepend some useful stuff like time and tag
       uptime_s = SYSTEM_GetUpTime_MS() / 1000.0f;
       char p = Persist ? '#' : ' ';
-      snprintf(text, _LenTot, "[%10.3f] %c%-4s : %6s : %s", uptime_s, p, _LevelName[Level], Module, Output);
+      snprintf(output, _LenTot, "[%10.3f] %c%-4s : %6s : %s", uptime_s, p, _LevelName[Level], Module, Output);
 
       if (_Progress[Logger] > 0)
       {
@@ -406,19 +451,29 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
 
       if (Persist)
       {
-        _UpdateLogs(Logger, text);
+        _UpdateLog(Logger, output);
       }
 
-      // Send output to debug serial port
-      strcat(text, "\r\n");
-      if (!SERIAL_SendString(_Port[Logger], text))
+      strcat(output, "\r\n");
+      if (!Direct)
       {
-        // Some chars were not sent. Overflow?
+        // Send output to debug serial port
+        if (!SERIAL_SendString(_Port[Logger], output))
+        {
+          // Some chars were not sent. Overflow?
+          assert_always();
+        }
+      }
+      else
+      {
+        // Send directly to the UART without queuing in the serial task
+        if (!UART_SendString(_Port[Logger], output, true))
+        {
+          // Some chars were not sent. Overflow?
+          assert_always();
+        }
       }
     }
-  }
-  else
-  {
   }
 
   return proceed;
@@ -493,31 +548,34 @@ static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, cons
  @return    True if eeprom (not just the cache) was updated
 
  *******************************************************************/
-static bool _UpdateLogs(tLogger Logger, char* Output)
+static bool _UpdateLog(tLogger Logger, char* Output)
 {
-  bool eeprom_updated = false;
+  bool updated = false;
 
   // Store the log in the circular cache, overwriting oldest entry if full
   strncpy(_Cache[Logger][_CacheIndex[Logger]], Output, _LenTot);
   _Cache[Logger][_CacheIndex[Logger]][strlen(Output)] = '\0';
-  _CacheIndex[Logger] = (_CacheIndex[Logger] + 1) % _CacheSize;
-  if (_CacheCount[Logger] < _CacheSize)
+  _CacheIndex[Logger] = (_CacheIndex[Logger] + 1) % _CacheMax;
+  if (_CacheCount[Logger] < _CacheMax)
   {
     _CacheCount[Logger]++;
   }
 
-  if (_PersistEnabled)
+  if (_ExtEEPROMenabled)
   {
-    // TODO Store the log in non-volatile memory
-    _ExternalLogIndex = (_ExternalLogIndex + 1) % _EEPROMSize;
-    eeprom_updated = EEPROM_WriteReg(eEEPROM_Reg_LogIndex, _ExternalLogIndex);
+    // Store the log in EXT EEPROM memory
+    EEPROM_EXT_WriteLog(_ExternalLogIndex, (uint8_t*)Output);
+
+    // Increment EXT EEPROM log index in MCU EEPROM
+    _ExternalLogIndex = (_ExternalLogIndex + 1) % _ExternalLogMax;
+    updated = EEPROM_MCU_WriteReg(eEEPROM_Reg_LogIndex, _ExternalLogIndex);
   }
 
-  return eeprom_updated;
+  return updated;
 }
 
-// Stubs for when debug output is not enabled
-#else
+#else  // Stubs for when debug output is not enabled
+
 bool LOG_Init(tLogger Logger, tSerialPort Port, tLogLevel Level, bool Enabled)
 {
   return true;
@@ -528,7 +586,7 @@ bool LOG_IsInit(tLogger Logger)
   return true;
 }
 
-void LOG_Reset(tLogger Logger)
+void LOG_Reset(tLogger Logger, bool ClearEEPROM)
 {
 }
 
@@ -548,6 +606,16 @@ void LOG_SetLevel(tLogger Logger, tLogLevel Level)
 bool LOG_Write(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, const char* Fmt, ...)
 {
   return true;
+}
+
+bool LOG_WriteDirect(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, const char* Fmt, ...)
+{
+  return true;
+}
+
+uint32_t LOG_GetCachedEntry(tLogger Logger, uint32_t Index, char* Buffer)
+{
+  return 0;
 }
 
 bool LOG_Print(tLogger Logger, const char* Output, bool Linefeed)

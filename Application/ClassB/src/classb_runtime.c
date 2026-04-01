@@ -41,7 +41,7 @@
 #include "classb_params.h"
 #include "classb_vars.h"
 #include "timer.h"
-#include "eeprom.h"
+#include "eeprom_mcu.h"
 #include "log.h"
 #include "crc.h"
 
@@ -60,6 +60,7 @@ static const char* _Module = "CBRT";  ///< Module name for debug logging
 static bool _IsDebugLoad = false;  ///< Flag to detect debug vs flash load
 
 /* Private function prototypes -----------------------------------------------*/
+
 /* Public Implementation -----------------------------------------------------*/
 
 /*******************************************************************/
@@ -150,7 +151,7 @@ tClassBRunStatus Runtime_CPUTest(bool Enabled)
   if (!success)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_CPU);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_CPU);
   }
 
   return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
@@ -233,7 +234,7 @@ tClassBRunStatus Runtime_RAMTest(bool Enabled)
   if (!success)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_RAM);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_RAM);
   }
 
   return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
@@ -339,7 +340,7 @@ tClassBRunStatus Runtime_CRCTest(bool Enabled)
   if (status == eClassBRunStatus_FAIL)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_CRC);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_CRC);
   }
 
   return status;
@@ -382,7 +383,7 @@ tClassBRunStatus Runtime_CLKTest(bool Enabled)
   if (clck_sts != FREQ_OK)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_CLK);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_CLK);
   }
 
   return (clck_sts == FREQ_OK) ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
@@ -419,7 +420,7 @@ tClassBRunStatus Runtime_WDGTest(bool Enabled)
   if (!success)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_WDG);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_WDG);
   }
 
   return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
@@ -484,7 +485,7 @@ tClassBRunStatus Runtime_STKTest(bool Enabled)
   if (!success)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_Stack);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_Stack);
   }
 
   return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
@@ -531,7 +532,7 @@ tClassBRunStatus Runtime_FLOWTest(bool Enabled)
   if (!success)
   {
     // Persist error counts
-    EEPROM_IncrementReg(eEEPROM_Reg_ClassBError_Flow);
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_Flow);
   }
 
   return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;

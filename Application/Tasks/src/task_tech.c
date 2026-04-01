@@ -32,8 +32,6 @@
  @note    See TECHMODE.md for a complete description of the technician interface
 
 ******************************************************************************/
-
-// Access protected functions
 #define TASK_TECH_PROTECTED
 #define SYSTEM_PROTECTED
 #define CLASSB_PROTECTED
@@ -46,7 +44,7 @@
 #include "task_daq.h"
 #include "task_system.h"
 #include "classb_runtime.h"
-#include "eeprom.h"
+#include "eeprom_mcu.h"
 #include "queue.h"
 #include "timer.h"
 #include "log.h"
@@ -153,6 +151,7 @@ typedef struct
 } tRuntime;
 
 /* Private macro -------------------------------------------------------------*/
+
 /* Private function prototypes -----------------------------------------------*/
 
 // State machine helpers
@@ -228,6 +227,7 @@ static const tConfig _Config[] = {
   { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "sstop", .Handler = _Handler_StreamStop },
   { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "fault", .Handler = _Handler_Fault },
 };
+
 static_assert(NUM_TECH_COMMANDS == (sizeof(_Config) / sizeof(tConfig)), "TECH command config size mismatch");
 
 static const char* _ErrorStr[] = {
@@ -241,6 +241,7 @@ static const char* _ErrorStr[] = {
   "auth",
   "crc"
 };
+
 static_assert(NUM_TECH_ERRORS == (sizeof(_ErrorStr) / sizeof(_ErrorStr[0])), "TECH error string size mismatch");
 // clang-format on
 
@@ -928,6 +929,7 @@ static bool _Handler_Help(char* StreamTokens)
   _WriteMessage("set n,v       Set a DAQ value. n=DAQ item, v=numeric value (not all items modifiable)", true);
   _WriteMessage("log n         Returns log information. n=log index", true);
   _WriteMessage("fault n       Simulate a fault condition. n=fault code", true);
+  _WriteMessage("emul (n)      Set/get enable emulation mode. if n=1, set to enable", true);
   _WriteMessage("\nAll commands begin with a '*', end with a ';' and require a #CRC16 (#0000 to ignore)\n", true);
 
   return true;
@@ -966,7 +968,7 @@ static bool _Handler_Auth(char* StreamTokens)
   else
   {
     // Authentication successful
-    LOG_Write(eLogger_Sys, eLogLevel_Med, _Module, false, "Technician mode authenticated");
+    LOG_Write(eLogger_Sys, eLogLevel_High, _Module, true, "Technician mode authenticated");
     _Runtime.Authenticated = true;
     success = true;
   }
@@ -992,7 +994,6 @@ static bool _Handler_System(char* StreamTokens)
   if (success)
   {
     strncpy(_ResponseBuffer, output, _MaxResponseSize);
-    _ResponseBuffer[_MaxResponseSize] = '\0';  // Ensure null termination
   }
 
   return success;
@@ -1098,8 +1099,7 @@ static bool _Handler_Meta(char* StreamTokens)
 
   if (success)
   {
-    strncpy(_ResponseBuffer, output, _MaxResponseSize - 1);
-    _ResponseBuffer[_MaxResponseSize - 1] = '\0';  // Ensure null termination
+    strncpy(_ResponseBuffer, output, _MaxResponseSize);
   }
 
   return success;
@@ -1181,12 +1181,11 @@ static bool _Handler_Get(char* StreamTokens)
   }
   else
   {
+    tDAQ_Entry entry = (tDAQ_Entry)v[0];
+    uint8_t index = (items == 2) ? v[1] : 0;
     char item[RESPONSE_BUFFER_SIZE];
     char output[RESPONSE_BUFFER_SIZE] = { '\0' };
     char note[MAX_NOTE_SIZE] = { '\0' };
-
-    tDAQ_Entry entry = (tDAQ_Entry)v[0];
-    uint8_t index = (items == 2) ? v[1] : 0;
 
     if (entry < _NumDAQEntries)
     {
@@ -1199,8 +1198,8 @@ static bool _Handler_Get(char* StreamTokens)
 
         DAQ_GetMetadata(entry, &config);
         strncpy(note, config.Name, MAX_NOTE_SIZE - 1);
-        sprintf(buf, "%i[%i]", entry, index);
 
+        sprintf(buf, "%i[%i]", entry, index);
         switch (entry)
         {
           case eDAQ_NOP:
@@ -1248,9 +1247,9 @@ static bool _Handler_Get(char* StreamTokens)
       // Append note if there is one
       if (strlen(note) > 0)
       {
-        char buf[_MaxResponseSize];
+        char buf[RESPONSE_BUFFER_SIZE];
         sprintf(buf, ",\"note\":\"%s\"", note);
-        strncat(output, buf, _MaxResponseSize - strlen(output) - 1);
+        strncat(output, buf, RESPONSE_BUFFER_SIZE - strlen(output) - 1);
       }
 
       // Copy final output to response buffer
@@ -1329,6 +1328,11 @@ static bool _Handler_GetLog(char* StreamTokens)
       snprintf(output, _MaxResponseSize, "\"entry\":%i, \"log\":%s", entry, log);
       success = true;
     }
+    else
+    {
+      snprintf(output, _MaxResponseSize, "\"entry\":%i, \"log\":<invalid>", entry);
+      success = true;
+    }
   }
 
   if (success)
@@ -1379,7 +1383,7 @@ static bool _Handler_StreamItems(char* StreamTokens)
   {
     // Already streaming
   }
-  else if (items < 1)
+  else if (items < 2)
   {
     // No items parsed
   }
@@ -1387,7 +1391,7 @@ static bool _Handler_StreamItems(char* StreamTokens)
   {
     // Items should be in pairs of value[subvalue]
   }
-  else if (items > _MaxStreamItems * 2)  // Items are in pairs of value[subvalue], so max items is 2x MAX_STREAM_ITEMS
+  else if (items > _MaxStreamItems * 2)  // Items are in pairs value[subvalue], so max items is 2x MAX_STREAM_ITEMS
   {
     // Too many items
   }
@@ -1395,8 +1399,8 @@ static bool _Handler_StreamItems(char* StreamTokens)
   {
     _ResetStream(true);
 
-    success = true;
     items /= 2;  // Convert from number of parsed values to number of item pairs
+    success = true;
     for (uint32_t i = 0; i < _MaxStreamItems; i++)
     {
       if (i < items)
@@ -1466,7 +1470,7 @@ static bool _Handler_StreamStart(char* StreamTokens)
   bool success = false;
   int items;
   char command[MAX_CMD_SIZE];
-  int32_t freq;  // Frequency in Hz
+  int32_t freq;  // Hertz (updates per second)
 
   items = sscanf(_Tokens[1], "%[^,],%li", command, &freq);
   LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "sstart: command=%s, freq=%li", command, freq);
@@ -1574,7 +1578,7 @@ static bool _Handler_Fault(char* StreamTokens)
   {
     success = ClassB__SetFault((tClassBRunItem)entry);
 
-    snprintf(output, _MaxResponseSize - 1, "%s:{\"fault\":%i,\"}", _Meta, entry);
+    snprintf(output, _MaxResponseSize, "%s:{\"fault\":%i,\"}", _Meta, entry);
   }
 
   if (success)
