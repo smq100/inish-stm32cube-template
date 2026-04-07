@@ -37,19 +37,20 @@
 
 #include "main.h"
 #include "task_system.h"
+#include "task_led.h"
 #include "classb.h"
 #include "classb_startup.h"
 #include "classb_vars.h"
 #include "classb_params.h"
 #include "log.h"
-#include "util.h"
 #include "eeprom_mcu.h"
+#include "util.h"
 #include "timer.h"
-#include "iwdg.h"
-#include "task_led.h"
+#include "dma.h"
+#include "adc.h"
+#include "stm32l1xx_ll_adc.h"
 
 /* Private typedef -----------------------------------------------------------*/
-
 typedef struct
 {
   bool Enabled;
@@ -66,10 +67,12 @@ typedef struct
 } tClassbRunConfig;
 
 /* Private define ------------------------------------------------------------*/
-/* Private macro -------------------------------------------------------------*/
-/* Public variables ----------------------------------------------------------*/
-/* Private variables ---------------------------------------------------------*/
 
+/* Private macro -------------------------------------------------------------*/
+
+/* Public variables ----------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
 static const char* _Module = "CLSB";  //!< Module Name for debug logging
 
 static bool _FaultInjection[eClassBRunItem_NUM] = { false };  //!< Fault injection flags
@@ -90,6 +93,7 @@ static const tClassbStartConfig _StartConfig[] = {
 
   { true, false, false, "sCRC",       Start_CRCTest },
   { true, false, false, "sCLK" ,      Start_CLKTest },
+  { true, false, false, "sADC" ,      Start_ADCTest },
   { true, false, false, "sFlow",      Start_FLOWTest },
   { true, false, true,  "sComplete",  Start_Complete },
 };
@@ -99,6 +103,7 @@ static const tClassbRunConfig _RunConfig[] = {
   { true, "rCPU" },
   { true, "rRAM" },
   { true, "rCRC" },
+  { true, "rADC" },
 
 #ifndef TEST__ENABLE_DEBUG
   { true, "rCLK" },
@@ -386,20 +391,12 @@ void ClassB_Fail_Startup(tClassBStartItem Test)
 {
   print("Startup test '%s' FAILED. Halting execution.\n\r", _StartConfig[Test].Name);
 
-  // Flash the LED based on the test that failed (1 flash for test 1, 2 flashes for test 2, etc.)
-  uint32_t loop = (uint32_t)Test * 2;
   while (true)
   {
-    if (loop--)
-    {
-      HAL_GPIO_TogglePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin);
-      HAL_Delay(175);
-    }
-    else
-    {
-      loop = (uint32_t)Test * 2;
-      HAL_Delay(1000);
-    }
+    HAL_IWDG_Refresh(&hIWDG_APP);
+
+    HAL_GPIO_TogglePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin);
+    HAL_Delay(100);
   }
 }
 
@@ -411,10 +408,14 @@ void ClassB_Fail_Startup(tClassBStartItem Test)
 *******************************************************************/
 void ClassB_Fail_Runtime(tClassBRunItem Test)
 {
-  LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Runtime test '%s' failed.", _RunConfig[Test].Name);
+  LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Runtime test '%s' failed.", _RunConfig[Test].Name);
 
   // Flash the LED based on the test that failed. test+1 so test 0 pulses once.
+#ifndef HW_IS_NUCLEO
+  LED_Pulse(eLED_Error, 1.0f, -1, (int32_t)(Test + 1), "");
+#else
   SYSTEM_SetStatusLED(eStatusLED_Error, (int8_t)(Test + 1));
+#endif
 }
 
 /*******************************************************************/
@@ -476,15 +477,14 @@ const char* ClassB_GetRuntimeName(tClassBRunItem Test)
  @param   startup : Indicates if the test is run during startup or runtime
  @return  Status of the clock test
 *******************************************************************/
-tClockStatus RunCLKTest(bool Startup)
+tClockStatus ClassB_RunCLKTest(bool Startup)
 {
-  extern TIM_HandleTypeDef htim10;
   tClockStatus clck_sts = TEST_ONGOING;
 
   ClassB_ControlFlowEnter(Startup ? FLOW_START_CLK2 : FLOW_RUNTIME_CLK2);
 
-  __HAL_TIM_CLEAR_FLAG(&htim10, TIM_FLAG_CC1);
-  if (HAL_TIM_IC_Start_IT(&htim10, TIM_CHANNEL_1) == HAL_OK)
+  __HAL_TIM_CLEAR_FLAG(&hTIM_CLKTEST, TIM_FLAG_CC1);
+  if (HAL_TIM_IC_Start_IT(&hTIM_CLKTEST, TIM_CLKTEST_CH) == HAL_OK)
   {
     // Wait for two subsequent LSI periods measurements
     // Use sequence counter approach to ensure we capture fresh measurements
@@ -498,7 +498,7 @@ tClockStatus RunCLKTest(bool Startup)
     {
       if (TIMER_GetTick() > timeout)
       {
-        LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "CLK test timeout waiting for LSI period 1");
+        LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "CLK test timeout waiting for LSI period 1");
         clck_sts = MCO_START_TIM_FAIL;
         break;
       }
@@ -514,7 +514,7 @@ tClockStatus RunCLKTest(bool Startup)
       {
         if (TIMER_GetTick() > timeout)
         {
-          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "CLK test timeout waiting for LSI period 2");
+          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "CLK test timeout waiting for LSI period 2");
           clck_sts = MCO_START_TIM_FAIL;
           break;
         }
@@ -523,7 +523,7 @@ tClockStatus RunCLKTest(bool Startup)
 
     uint32_t period = ClassB_GetVar(eClassBVar_RUN_LSI_PERIOD_VALUE_V32).V32;
 
-    // LSI_MEASURE_PRESCSALER must the same as tim10 IC prescaler
+    // LSI_MEASURE_PRESCSALER must the same as TIM10_CLK_TEST_FREQ IC prescaler
     const uint32_t limit_low = SYS_LIMIT_LOW(SYSCLK_AT_RUN);
     const uint32_t limit_high = SYS_LIMIT_HIGH(SYSCLK_AT_RUN);
 
@@ -543,32 +543,214 @@ tClockStatus RunCLKTest(bool Startup)
     {
       // Below expected
       LOG_Write(
-        eLogger_Sys, eLogLevel_Error, _Module, false, "CLK test FAIL: period %lu below limit %lu", period, limit_low);
+        eLogger_Sys, eLogLevel_Error, _Module, true, "CLK test FAIL: period %lu below limit %lu", period, limit_low);
       clck_sts = SYSCLK_LOW;
     }
     else if (period > limit_high)
     {
       LOG_Write(
-        eLogger_Sys, eLogLevel_Error, _Module, false, "CLK test FAIL: period %lu above limit %lu", period, limit_high);
+        eLogger_Sys, eLogLevel_Error, _Module, true, "CLK test FAIL: period %lu above limit %lu", period, limit_high);
       clck_sts = SYSCLK_HIGH;
     }
     else
     {
+      LOG_Write(eLogger_Sys,
+                eLogLevel_Low,
+                _Module,
+                true,
+                "CLK test PASS: period %lu within limits %lu/%lu",
+                period,
+                limit_low,
+                limit_high);
+
       clck_sts = FREQ_OK;
     }
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "CLK test FAIL: unable to start timer");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "CLK test FAIL: unable to start timer");
     clck_sts = MCO_START_TIM_FAIL;
   }
 
   // Stop timer after test completes
-  HAL_TIM_IC_Stop_IT(&htim10, TIM_CHANNEL_1);
+  HAL_TIM_IC_Stop_IT(&hTIM_CLKTEST, TIM_CLKTEST_CH);
 
   ClassB_ControlFlowExit(Startup ? FLOW_START_CLK2 : FLOW_RUNTIME_CLK2);
 
   return clck_sts;
+}
+
+/*******************************************************************/
+/*!
+ @brief   Run ADC test
+ @param   startup : Indicates if the test is run during startup or runtime
+ @return  Status of the test
+*******************************************************************/
+bool ClassB_RunADCTest(bool Startup)
+{
+  bool success = true;
+  uint16_t vref_raw = 0u;
+  uint16_t temp_raw = 0u;
+
+  if (Startup)
+  {
+    MX_ADC_Init();
+  }
+
+  // Stop any active DMA conversion before reconfiguring.
+  // This does not disturb the DMA peripheral itself or the DMA handle link.
+  (void)HAL_ADC_Stop_DMA(&hADC_APP);
+
+  // Switch temporarily to single-channel polling mode so we can read VREFINT and
+  // TEMPSENSOR without touching any TGEN state or DMA buffers.
+  // HAL_ADC_Init() skips MspInit (and therefore does not touch the DMA link) when
+  // the handle state is not HAL_ADC_STATE_RESET, which is the case here.
+  hADC_APP.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hADC_APP.Init.NbrOfConversion = 1u;
+  hADC_APP.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+
+  if (HAL_ADC_Init(&hADC_APP) != HAL_OK)
+  {
+    if (Startup)
+    {
+      print("ADC test FAIL: unable to reconfigure ADC\r\n");
+    }
+    else
+    {
+      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "ADC test FAIL: unable to reconfigure ADC");
+    }
+    success = false;
+  }
+
+  // Read VREFINT
+  if (success)
+  {
+    ADC_ChannelConfTypeDef ch = { 0 };
+    ch.Channel = ADC_CHANNEL_VREFINT;
+    ch.Rank = ADC_REGULAR_RANK_1;
+    ch.SamplingTime = ADC_SAMPLETIME_96CYCLES;
+
+    if (HAL_ADC_ConfigChannel(&hADC_APP, &ch) != HAL_OK || HAL_ADC_Start(&hADC_APP) != HAL_OK ||
+        HAL_ADC_PollForConversion(&hADC_APP, 10u) != HAL_OK)
+    {
+      if (Startup)
+      {
+        print("ADC test FAIL: VREFINT read error\r\n");
+      }
+      else
+      {
+        LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "ADC test FAIL: VREFINT read error");
+      }
+      success = false;
+    }
+    else
+    {
+      vref_raw = (uint16_t)HAL_ADC_GetValue(&hADC_APP);
+      (void)HAL_ADC_Stop(&hADC_APP);
+    }
+  }
+
+  // Read TEMPSENSOR
+  if (success)
+  {
+    ADC_ChannelConfTypeDef ch = { 0 };
+    ch.Channel = ADC_CHANNEL_TEMPSENSOR;
+    ch.Rank = ADC_REGULAR_RANK_1;
+    ch.SamplingTime = ADC_SAMPLETIME_96CYCLES;
+
+    if (HAL_ADC_ConfigChannel(&hADC_APP, &ch) != HAL_OK || HAL_ADC_Start(&hADC_APP) != HAL_OK ||
+        HAL_ADC_PollForConversion(&hADC_APP, 10u) != HAL_OK)
+    {
+      if (Startup)
+      {
+        print("ADC test FAIL: TEMPSENSOR read error\r\n");
+      }
+      else
+      {
+        LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "ADC test FAIL: TEMPSENSOR read error");
+      }
+      success = false;
+    }
+    else
+    {
+      temp_raw = (uint16_t)HAL_ADC_GetValue(&hADC_APP);
+      (void)HAL_ADC_Stop(&hADC_APP);
+    }
+  }
+
+  // Restore the full 5-channel scan+DMA configuration unconditionally so that
+  // TGEN ADC DMA reads work correctly regardless of test outcome.
+  MX_ADC_Init();
+
+  // Validate
+  if (success)
+  {
+    int16_t vdda_mv = CalcVDDA_mv(vref_raw);
+    int16_t temp_decic = CalcCoreTemp_Cx10(temp_raw, vref_raw);
+
+    if (vdda_mv < CLASSB_ADC_VREF_LOW_MV || vdda_mv > CLASSB_ADC_VREF_HIGH_MV)
+    {
+      if (Startup)
+      {
+        print("ADC test FAIL: Vref %d mV out of range [%d, %d]\r\n",
+              vdda_mv,
+              CLASSB_ADC_VREF_LOW_MV,
+              CLASSB_ADC_VREF_HIGH_MV);
+      }
+      else
+      {
+        LOG_Write(eLogger_Sys,
+                  eLogLevel_Error,
+                  _Module,
+                  true,
+                  "ADC test FAIL: Vref %d mV out of range [%d, %d]",
+                  vdda_mv,
+                  CLASSB_ADC_VREF_LOW_MV,
+                  CLASSB_ADC_VREF_HIGH_MV);
+      }
+
+      success = false;
+    }
+
+    if (temp_decic < CLASSB_ADC_TEMP_LOW_DECIC || temp_decic > CLASSB_ADC_TEMP_HIGH_DECIC)
+    {
+      if (Startup)
+      {
+        print("ADC test FAIL: MCU temp %d deci-C out of range [%d, %d]\r\n",
+              temp_decic,
+              CLASSB_ADC_TEMP_LOW_DECIC,
+              CLASSB_ADC_TEMP_HIGH_DECIC);
+      }
+      else
+      {
+        LOG_Write(eLogger_Sys,
+                  eLogLevel_Error,
+                  _Module,
+                  true,
+                  "ADC test FAIL: MCU temp %d deci-C out of range [%d, %d]",
+                  temp_decic,
+                  CLASSB_ADC_TEMP_LOW_DECIC,
+                  CLASSB_ADC_TEMP_HIGH_DECIC);
+      }
+
+      success = false;
+    }
+
+    if (success)
+    {
+      LOG_Write(eLogger_Sys,
+                eLogLevel_Low,
+                _Module,
+                false,
+                "ADC test PASS: vref_raw=%u temp_raw=%u Vref=%.2fV MCU temp=%.1fC",
+                vref_raw,
+                temp_raw,
+                vdda_mv / 1000.0f,
+                temp_decic / 10.0f);
+    }
+  }
+
+  return success;
 }
 
 /*******************************************************************/
@@ -581,6 +763,7 @@ void ClassB_PrintErrorCounts(void)
   uint32_t cpu_errors = 0;
   uint32_t ram_errors = 0;
   uint32_t crc_errors = 0;
+  uint32_t adc_errors = 0;
   uint32_t clk_errors = 0;
   uint32_t wdg_errors = 0;
   uint32_t stack_errors = 0;
@@ -589,6 +772,7 @@ void ClassB_PrintErrorCounts(void)
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CPU, &cpu_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_RAM, &ram_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CRC, &crc_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_ADC, &adc_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CLK, &clk_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_WDG, &wdg_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_Stack, &stack_errors);
@@ -598,11 +782,13 @@ void ClassB_PrintErrorCounts(void)
             eLogLevel_High,
             _Module,
             false,
-            "ClassB Errors: CPU=%lu, RAM=%lu, CRC=%lu, CLK=%lu, WDG=%lu, STK=%lu, FLO=%lu",
+            "ClassB Errors: CPU=%lu, RAM=%lu, CRC=%lu,  ADC=%lu, CLK=%lu, WDG=%lu, STK=%lu, FLO=%lu",
             cpu_errors,
             ram_errors,
             crc_errors,
+            adc_errors,
             clk_errors,
+            adc_errors,
             wdg_errors,
             stack_errors,
             flow_errors);
@@ -611,6 +797,13 @@ void ClassB_PrintErrorCounts(void)
 /* Protected functions ------------------------------------------------------ */
 
 #ifdef CLASSB_PROTECTED
+
+/*******************************************************************/
+/*!
+ @brief   Sets a fault for a specific runtime test
+ @param   Test : The runtime test to set the fault for
+ @return  Success status of the operation
+*******************************************************************/
 bool ClassB__SetFault(tClassBRunItem Test)
 {
   bool success = false;
@@ -625,6 +818,12 @@ bool ClassB__SetFault(tClassBRunItem Test)
   return success;
 }
 
+/*******************************************************************/
+/*!
+ @brief   Clears a fault for a specific runtime test
+ @param   Test : The runtime test to clear the fault for
+ @return  Success status of the operation
+*******************************************************************/
 bool ClassB__ClearFault(tClassBRunItem Test)
 {
   bool success = false;
@@ -640,6 +839,12 @@ bool ClassB__ClearFault(tClassBRunItem Test)
   return success;
 }
 
+/*******************************************************************/
+/*!
+ @brief   Gets the fault status for a specific runtime test
+ @param   Test : The runtime test to get the fault status for
+ @return  Fault status of the operation
+*******************************************************************/
 bool ClassB__GetFault(tClassBRunItem Test)
 {
   bool fault = false;
@@ -668,7 +873,7 @@ void ClassB__IC_Callback(TIM_HandleTypeDef* Htim)
   extern tDataValue ClassBDataInv[];
 
   static uint32_t prev = 0;
-  uint32_t now = HAL_TIM_ReadCapturedValue(Htim, TIM_CHANNEL_1);
+  uint32_t now = HAL_TIM_ReadCapturedValue(Htim, TIM_CLKTEST_CH);
 
   uint32_t period;
   if (now >= prev)

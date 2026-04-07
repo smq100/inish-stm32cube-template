@@ -223,7 +223,7 @@ bool DAQ_Init(void)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Not Initialized");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Not Initialized");
   }
 
   return _Initialized;

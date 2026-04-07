@@ -41,11 +41,11 @@ static const uint16_t _LogSizeBytes = MAX_DEBUGLOG_CHARS_TOT;  ///! Must be mult
 static const uint32_t _MaxEEPROMSizeBytes = 32768u;            ///! 32KB total size of the EEPROM
 static const uint32_t _I2Ctimeout = 100u;                      ///! Timeout for I2C operations in ms
 
-//!< true to emulate EEPROM in RAM (for testing without hardware). false to use actual EEPROM.
+//!< true to emulate EEPROM in RAM (for testing without hardware). Always false when using actual EEPROM
 static const bool _Emulate = true;
 
-static I2C_HandleTypeDef* _I2C_Handle = &hi2c1;
-static uint16_t _DeviceAddress = 0x50 << 1;  // 7-bit address shifted for HAL
+static I2C_HandleTypeDef* _I2C_Handle = &hI2C_EXTEEPROM;
+static uint16_t _DeviceAddress = (0x50 << 1);  // 7-bit address shifted for HAL
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -121,7 +121,7 @@ bool EEPROM_EXT_Read(uint32_t Address, uint8_t* Data, uint16_t Length)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to read EXT EEPROM 0x%04X", Address);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to read EXT EEPROM 0x%04X", Address);
   }
 
   return success;
@@ -200,7 +200,7 @@ bool EEPROM_EXT_Write(uint32_t Address, const uint8_t* Data, uint16_t Length)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to write EXT EEPROM 0x%04X", Address);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to write EXT EEPROM 0x%04X", Address);
   }
 
   return success;
@@ -242,7 +242,7 @@ bool EEPROM_EXT_Erase(void)
 
     if (_Emulate)
     {
-      // Just ignore for testing without hardware
+      // Ignore. Just ignore for testing without hardware
     }
     else if (HAL_I2C_IsDeviceReady(_I2C_Handle, _DeviceAddress, _I2Ctimeout, 10u) != HAL_OK)
     {
@@ -255,7 +255,7 @@ bool EEPROM_EXT_Erase(void)
 
   if (!success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to erase EXT EEPROM");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to erase EXT EEPROM");
   }
 
   return success;
@@ -292,7 +292,7 @@ bool EEPROM_EXT_ReadLog(uint32_t Index, uint8_t* Log)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to read log entry %u from EXT EEPROM", Index);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to read log entry %u from EXT EEPROM", Index);
   }
 
   return success;
@@ -329,7 +329,7 @@ bool EEPROM_EXT_WriteLog(uint32_t Index, const uint8_t* Log)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to write log entry %u to EXT EEPROM", Index);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to write log entry %u to EXT EEPROM", Index);
   }
 
   return success;
@@ -351,7 +351,7 @@ static bool _IsAddressValid(uint32_t Address, uint16_t Length)
   if ((Address + Length) > _MaxEEPROMSizeBytes)
   {
     success = false;
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Invalid address 0x%04X (length %u)", Address, Length);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Invalid address 0x%04X (length %u)", Address, Length);
   }
 
   return success;

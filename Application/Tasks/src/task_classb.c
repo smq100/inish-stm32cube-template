@@ -64,8 +64,11 @@ typedef struct
 } tRuntime;
 
 /* Private define ------------------------------------------------------------*/
+
 /* Private macro -------------------------------------------------------------*/
+
 /* Public variables ----------------------------------------------------------*/
+
 /* Private variables ---------------------------------------------------------*/
 
 static const char* _Module = "T_CLSB";  //!< Module Name for debug logging
@@ -75,8 +78,9 @@ static tRuntime _Runtime;               //!< Runtime data
 
 static const fnClassBHandler_Runtime _Handler_CPU;
 static const fnClassBHandler_Runtime _Handler_RAM;
-static const fnClassBHandler_Runtime _Handler_CLK;
 static const fnClassBHandler_Runtime _Handler_CRC;
+static const fnClassBHandler_Runtime _Handler_ADC;
+static const fnClassBHandler_Runtime _Handler_CLK;
 static const fnClassBHandler_Runtime _Handler_WDG;
 static const fnClassBHandler_Runtime _Handler_Stack;
 static const fnClassBHandler_Runtime _Handler_Flow;
@@ -89,6 +93,7 @@ static const tConfig _Config[] = {
   { .Enabled = true, .Handler = _Handler_CPU  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "cpu",   },
   { .Enabled = true, .Handler = _Handler_RAM  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "ram",   },
   { .Enabled = true, .Handler = _Handler_CRC  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "crc",   },
+  { .Enabled = true, .Handler = _Handler_ADC  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "adc",   },
   { .Enabled = true, .Handler = _Handler_CLK  , .MaxErrors = 3u, .ErrorReset_Sec = 10u, .Name = "clk",   },
   { .Enabled = true, .Handler = _Handler_WDG  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "wdg",   },
   { .Enabled = true, .Handler = _Handler_Stack, .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "stack", },
@@ -110,8 +115,6 @@ static_assert(sizeof(_Config) / sizeof(tConfig) == eClassBRunItem_NUM, "tConfig 
  *******************************************************************/
 bool CLASSB_Init(void)
 {
-  extern TIM_HandleTypeDef htim10;
-
   // Let's get started
   _Runtime.Initialized = Runtime_Init();
 
@@ -129,7 +132,7 @@ bool CLASSB_Init(void)
     }
 
     // Stop timer for CLK test now
-    HAL_TIM_IC_Stop_IT(&htim10, TIM_CHANNEL_1);
+    HAL_TIM_IC_Stop_IT(&hTIM_CLKTEST, TIM_CLKTEST_CH);
 
     // Register DAQ items
     tDAQ_Config daq;
@@ -141,7 +144,7 @@ bool CLASSB_Init(void)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Not Initialized");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Not Initialized");
   }
 
   return _Runtime.Initialized;
@@ -215,7 +218,7 @@ bool CLASSB_Exec(void)
       LOG_Write(eLogger_Sys,
                 eLogLevel_Error,
                 _Module,
-                false,
+                true,
                 "ClassB '%s' test failed (%lu)",
                 name_buf,
                 _Runtime.Errors[current]);
@@ -225,7 +228,7 @@ bool CLASSB_Exec(void)
       LOG_Write(eLogger_Sys,
                 eLogLevel_Warning,
                 _Module,
-                false,
+                true,
                 "ClassB '%s' test warning (%lu of max %lu)",
                 name_buf,
                 _Runtime.Errors[current],
@@ -234,7 +237,7 @@ bool CLASSB_Exec(void)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "ClassB '%s' test status unknown", name_buf);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "ClassB '%s' test status unknown", name_buf);
     assert_always();
   }
 
@@ -335,6 +338,18 @@ static tClassBRunStatus _Handler_RAM(bool enabled)
 static tClassBRunStatus _Handler_CLK(bool enabled)
 {
   return Runtime_CLKTest(enabled);
+}
+
+/*******************************************************************/
+/*!
+ @brief     Handles the ADC test
+ @param     None
+ @return    Status of the operation (eClassBRunStatus_PASS or eClassBRunStatus_FAIL)
+
+ *******************************************************************/
+static tClassBRunStatus _Handler_ADC(bool enabled)
+{
+  return Runtime_ADCTest(enabled);
 }
 
 /*******************************************************************/

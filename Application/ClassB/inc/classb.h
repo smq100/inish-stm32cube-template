@@ -63,6 +63,7 @@ typedef enum
 #define FLOW_START_CLK1 ((uint32_t)9)
 #define FLOW_START_CLK2 ((uint32_t)11)
 #define FLOW_START_CRC ((uint32_t)13)
+#define FLOW_START_ADC ((uint32_t)15)
 
 #define FLOW_RUNTIME_CPU1 ((uint32_t)1)
 #define FLOW_RUNTIME_CPU2 ((uint32_t)3)  // Do not modify; hard coded in assembly file
@@ -72,7 +73,8 @@ typedef enum
 #define FLOW_RUNTIME_WDG ((uint32_t)11)
 #define FLOW_RUNTIME_CLK1 ((uint32_t)13)
 #define FLOW_RUNTIME_CLK2 ((uint32_t)15)
-#define FLOW_RUNTIME_STACK ((uint32_t)17)
+#define FLOW_RUNTIME_ADC ((uint32_t)17)
+#define FLOW_RUNTIME_STACK ((uint32_t)19)
 
 #define TEST_CLASSB_NOINIT ((uint32_t)0x33333333)
 #define TEST_CLASSB_INPROGRESS ((uint32_t)0x55555555)
@@ -87,6 +89,7 @@ typedef enum
     (2 * FLOW_START_IWDG) + \
     FLOW_START_CLK1 +       \
     FLOW_START_CLK2 +       \
+    FLOW_START_ADC +       \
     FLOW_START_CRC )
 
 #define CHECKPOINT_RUNTIME  \
@@ -98,11 +101,14 @@ typedef enum
     FLOW_RUNTIME_WDG +      \
     FLOW_RUNTIME_CLK1 +      \
     FLOW_RUNTIME_CLK2 +      \
+    FLOW_RUNTIME_ADC +      \
     FLOW_RUNTIME_STACK)
 // clang-format on
 
 /* Exported macros ------------------------------------------------------------*/
+
 /* Exported vars ------------------------------------------------------------ */
+
 /* Exported functions ------------------------------------------------------- */
 
 bool ClassB_InitVars(bool Force);
@@ -121,7 +127,8 @@ void ClassB_ControlFlowEnter(uint32_t A);
 void ClassB_ControlFlowExit(uint32_t A);
 const char* ClassB_GetRuntimeName(tClassBRunItem Test);
 
-tClockStatus RunCLKTest(bool Startup);
+tClockStatus ClassB_RunCLKTest(bool Startup);
+bool ClassB_RunADCTest(bool Startup);
 
 void ClassB_PrintErrorCounts(void);
 

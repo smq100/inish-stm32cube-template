@@ -32,11 +32,7 @@
  ******************************************************************************/
 
 #include "main.h"
-
 #include "power.h"
-
-#include "tim.h"
-#include "iwdg.h"
 #include "timer.h"
 #include "log.h"
 #include "task_daq.h"
@@ -44,9 +40,10 @@
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
+
 /* Public variables ----------------------------------------------------------*/
 
-volatile bool tim11_sleep;        ///< flag set/cleared in timer11 IRQ while sleeping
+volatile bool tim_sleep;          ///< flag set/cleared in timer11 IRQ while sleeping
 uint16_t volatile phase_irq = 0;  ///< BITS set by interrupt-handlers, recording which IRQ caused sleep to wake
 
 /* Private variables ---------------------------------------------------------*/
@@ -90,23 +87,23 @@ bool POWER_Init(void)
 *******************************************************************/
 void POWER_Sleep(void)
 {
-  // Use TIM11 counter which keeps running during sleep
+  // Use TIM10 counter which keeps running during sleep
 
-  // Get timestamp before sleep. Have to use tim4 because systicks are suspended
-  uint32_t sleep_tic = __HAL_TIM_GET_COUNTER(&htim4);
+  // Get timestamp before sleep. Have to use hTIM_SLEEP_CNT because systicks are suspended
+  uint32_t sleep_tic = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_CNT);
 
   // Go to sleep; wait for a cross-over (other?) wake-up
   // Suspend Tick increment to prevent wakeup by Systick interrupt. Otherwise
   // the Systick interrupt will wake up the device within 1ms (HAL time base)
-  HAL_IWDG_Refresh(&hiwdg);
+  HAL_IWDG_Refresh(&hIWDG_APP);
   HAL_SuspendTick();
   __HAL_RCC_PWR_CLK_ENABLE();
   HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
   HAL_ResumeTick();
-  HAL_IWDG_Refresh(&hiwdg);
+  HAL_IWDG_Refresh(&hIWDG_APP);
 
-  // Convert sleep to milliseconds (TIM4 freq is 4.0 MHz)
-  uint32_t sleep_toc = __HAL_TIM_GET_COUNTER(&htim4);
+  // Convert sleep to milliseconds (hTIM_SLEEP_CNT freq is 4.0 MHz)
+  uint32_t sleep_toc = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_CNT);
   if (sleep_toc < sleep_tic)
   {
     // Handle rollover of 16-bit counter (rollover every 16.384ms at 4.0 MHz)
@@ -116,7 +113,7 @@ void POWER_Sleep(void)
 
   // Convert to milliseconds while preserving sub-ms contributions across calls.
   // This is important for POWER_Delay_us(), where each sleep is often <1ms.
-  const uint32_t ticks_per_ms = (TIM4_FREQ / 1000u);
+  const uint32_t ticks_per_ms = (TIM_SLEEP_COUNT_FREQ / 1000u);
   uint32_t total_ticks = sleep + _SleepFracTicks;
 
   // Integer ms portion of sleep is added to total sleep time
@@ -128,7 +125,7 @@ void POWER_Sleep(void)
 
 /*******************************************************************/
 /*!
- @brief  Cause a quick, self-limited sleep using internal timer (TIM11)
+ @brief  Cause a quick, self-limited sleep using internal timer (TIM10)
  @param  Usec   micro-seconds to sleep for (capped to ~32.7ms to stay below 16-bit timer rollover)
  @param  Sleep  true to actually sleep, false to just wait
  @retval None
@@ -143,24 +140,24 @@ void POWER_Delay_us(uint16_t Usec, bool Sleep)
   {
     Usec = POWER_SLEEP_US_MAX;
     LOG_Write(
-      eLogger_Sys, eLogLevel_Warning, _Module, false, "Requested sleep time too long; capping to max of ~32.7 ms");
+      eLogger_Sys, eLogLevel_Warning, _Module, true, "Requested sleep time too long; capping to max of ~32.7 ms");
   }
 
-  tim11_sleep = true;
+  tim_sleep = true;
 
   // Configure TIM11 as a one-shot wake timer for this call.
   // Clear stale status first to avoid an immediate wake on pending update flags.
-  HAL_TIM_Base_Stop_IT(&htim11);
-  __HAL_TIM_SET_COUNTER(&htim11, 0u);
-  __HAL_TIM_SET_AUTORELOAD(&htim11, (uint32_t)Usec - 1u);
-  __HAL_TIM_CLEAR_IT(&htim11, TIM_IT_UPDATE);
-  __HAL_TIM_CLEAR_FLAG(&htim11, TIM_FLAG_UPDATE);
+  HAL_TIM_Base_Stop_IT(&hTIM_SLEEP);
+  __HAL_TIM_SET_COUNTER(&hTIM_SLEEP, 0u);
+  __HAL_TIM_SET_AUTORELOAD(&hTIM_SLEEP, (uint32_t)Usec - 1u);
+  __HAL_TIM_CLEAR_IT(&hTIM_SLEEP, TIM_IT_UPDATE);
+  __HAL_TIM_CLEAR_FLAG(&hTIM_SLEEP, TIM_FLAG_UPDATE);
 
-  // Start timer and update interrupt. IRQ clears tim11_sleep when delay expires.
-  if (HAL_TIM_Base_Start_IT(&htim11) != HAL_OK)
+  // Start timer and update interrupt. IRQ clears tim_sleep when delay expires.
+  if (HAL_TIM_Base_Start_IT(&hTIM_SLEEP) != HAL_OK)
   {
-    tim11_sleep = false;
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to start short sleep timer");
+    tim_sleep = false;
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to start short sleep timer");
     return;
   }
 
@@ -172,23 +169,23 @@ void POWER_Delay_us(uint16_t Usec, bool Sleep)
 
   // Note: Sleep stops for ANY interrupt, so wait for the timer IRQ
   // with a timeout to prevent lockup if something goes wrong with the timer or its interrupt.
-  // The timer IRQ handler will clear the tim11_sleep flag when it fires
+  // The timer IRQ handler will clear the tim_sleep flag when it fires
   uint32_t timeout = TIMER_GetTick();
-  while (tim11_sleep)
+  while (tim_sleep)
   {
     if ((TIMER_GetElapsed_ms(timeout)) > 50u)  // Larger than ~32.7ms max timer delay
     {
-      tim11_sleep = false;
+      tim_sleep = false;
 
-      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Timeout waiting for short sleep timer");
+      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Timeout waiting for short sleep timer");
     }
   }
 
   // Ensure timer is fully stopped and IRQ source cleared after each short sleep,
   // so normal POWER_Sleep() calls are not disturbed by periodic TIM11 wakeups.
-  HAL_TIM_Base_Stop_IT(&htim11);
-  __HAL_TIM_CLEAR_IT(&htim11, TIM_IT_UPDATE);
-  __HAL_TIM_CLEAR_FLAG(&htim11, TIM_FLAG_UPDATE);
+  HAL_TIM_Base_Stop_IT(&hTIM_SLEEP);
+  __HAL_TIM_CLEAR_IT(&hTIM_SLEEP, TIM_IT_UPDATE);
+  __HAL_TIM_CLEAR_FLAG(&hTIM_SLEEP, TIM_FLAG_UPDATE);
 }
 
 /*******************************************************************/

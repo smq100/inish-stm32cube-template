@@ -60,7 +60,7 @@ static const float _BlackoutS[eLogger_NUM] = { -1.0f };  //!< Blackout period in
 static const uint32_t _LenMsg = MAX_DEBUGLOG_CHARS_MSG - 1;   // The max allowed chars of payload msg
 static const uint32_t _LenTot = MAX_DEBUGLOG_CHARS_TOT - 1;   // The max allowed chars in a debug log line
 static const uint32_t _CacheMax = MAX_CACHE_LOGS;             // The number of cache entries
-static const uint32_t _ExternalLogMax = MAX_EEPROM_LOGS;      // The number of EEPROM log entries
+static const uint32_t _ExternalMax = MAX_EEPROM_LOGS;         // The number of EEPROM log entries
 static const bool _ExtEEPROMenabled = (MAX_EEPROM_LOGS > 0);  //!< logs stored in non-volatile memory when desired
 
 // clang-format off
@@ -95,7 +95,7 @@ static uint32_t _CacheCount[eLogger_NUM] = { 0 };
 
 static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, const char* Output);
 static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, bool Direct, const char* Output);
-static bool _UpdateLog(tLogger Logger, char* Output);
+static bool _Update(tLogger Logger, char* Output);
 
 /* Public Implementation -----------------------------------------------------*/
 
@@ -417,7 +417,6 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
   float uptime_s;
   bool proceed = false;
 
-  // Send the output atomically using two methods
   if (_WillPrint(Logger, Level, Module, Output))
   {
     // Determine if we want to print the output based on id and timeout
@@ -451,7 +450,7 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
 
       if (Persist)
       {
-        _UpdateLog(Logger, output);
+        _Update(Logger, output);
       }
 
       strcat(output, "\r\n");
@@ -501,13 +500,8 @@ static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, cons
   {
     assert_always();
   }
-  else if (!IsPointerValid((uintptr_t)Output))
-  {
-    assert_always();
-  }
   else if (!SERIAL_IsEnabled(_Port[Logger]))
   {
-    // Not yet, please
   }
   else if (!_Enabled[Logger])
   {
@@ -548,7 +542,7 @@ static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, cons
  @return    True if eeprom (not just the cache) was updated
 
  *******************************************************************/
-static bool _UpdateLog(tLogger Logger, char* Output)
+static bool _Update(tLogger Logger, char* Output)
 {
   bool updated = false;
 
@@ -567,14 +561,18 @@ static bool _UpdateLog(tLogger Logger, char* Output)
     EEPROM_EXT_WriteLog(_ExternalLogIndex, (uint8_t*)Output);
 
     // Increment EXT EEPROM log index in MCU EEPROM
-    _ExternalLogIndex = (_ExternalLogIndex + 1) % _ExternalLogMax;
+    _ExternalLogIndex = (_ExternalLogIndex + 1) % _ExternalMax;
     updated = EEPROM_MCU_WriteReg(eEEPROM_Reg_LogIndex, _ExternalLogIndex);
   }
 
   return updated;
 }
 
-#else  // Stubs for when debug output is not enabled
+/*******************************************************************/
+// Stubs for when debug output is not enabled
+/*******************************************************************/
+
+#else
 
 bool LOG_Init(tLogger Logger, tSerialPort Port, tLogLevel Level, bool Enabled)
 {

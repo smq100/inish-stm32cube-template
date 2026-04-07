@@ -193,7 +193,7 @@ bool BUTTON_Init(void)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Not Initialized");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Not Initialized");
   }
 
   return _Initialized;
@@ -434,7 +434,7 @@ static void _ProcessState(void)
         queued = QUEUE_Enque(&_Queue, &newState);
         if (!queued)
         {
-          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Button queue full");
+          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Button queue full");
         }
 
         // Start hold timing
@@ -450,7 +450,7 @@ static void _ProcessState(void)
         queued = QUEUE_Enque(&_Queue, &newState);
         if (!queued)
         {
-          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Button queue full");
+          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Button queue full");
         }
 
         // Check if button released before hold timeout (i.e. button click)
@@ -461,7 +461,7 @@ static void _ProcessState(void)
           queued = QUEUE_Enque(&_Queue, &newState);
           if (!queued)
           {
-            LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Button queue full");
+            LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Button queue full");
           }
         }
 
@@ -481,7 +481,7 @@ static void _ProcessState(void)
         queued = QUEUE_Enque(&_Queue, &newState);
         if (!queued)
         {
-          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Button queue full");
+          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Button queue full");
         }
 
         // Stop hold timing
@@ -504,7 +504,7 @@ static void _ProcessState(void)
         newState = (uint8_t)(button << BUTTON_STATE_BITS | (eButtonState_Repeat & BUTTON_STATE_MASK));
         if (!QUEUE_Enque(&_Queue, &newState))
         {
-          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Button queue full");
+          LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Button queue full");
         }
 
         // restart Repeat timer

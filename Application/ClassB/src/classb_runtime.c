@@ -43,7 +43,6 @@
 #include "timer.h"
 #include "eeprom_mcu.h"
 #include "log.h"
-#include "crc.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -94,7 +93,7 @@ bool Runtime_Init(void)
     char name_buf[10];
     if (!ClassB_IsRuntimeTestEnabled((tClassBRunItem)i, name_buf))
     {
-      LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, false, "ClassB runtime test '%s' disabled", name_buf);
+      LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, true, "ClassB runtime test '%s' disabled", name_buf);
     }
   }
 
@@ -110,7 +109,7 @@ bool Runtime_Init(void)
 
   // Reset CRC peripheral accumulator for the runtime CRC test (does not affect the startup CRC test which runs earlier)
   // HAL_CRC_Init() does NOT reset CRC->DR; __HAL_CRC_DR_RESET writes the CRC_CR_RESET bit.
-  __HAL_CRC_DR_RESET(&hcrc);
+  __HAL_CRC_DR_RESET(&hCRC_APP);
 
   return true;
 }
@@ -348,6 +347,42 @@ tClassBRunStatus Runtime_CRCTest(bool Enabled)
 
 /*******************************************************************/
 /*!
+ @brief     Returns the ADC test status
+ @param     None
+ @return    Status of the operation (eClassBRunStatus_PASS or eClassBRunStatus_FAIL)
+ *******************************************************************/
+tClassBRunStatus Runtime_ADCTest(bool Enabled)
+{
+  bool success = true;
+
+  ClassB_ControlFlowEnter(FLOW_RUNTIME_ADC);
+
+  if (Enabled)
+  {
+    if (ClassB__GetFault(eClassBRunItem_ADC))
+    {
+      success = false;
+      ClassB__ClearFault(eClassBRunItem_ADC);
+    }
+    else
+    {
+      success = ClassB_RunADCTest(false);
+    }
+  }
+
+  if (!success)
+  {
+    // Persist error counts
+    EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_ADC);
+  }
+
+  ClassB_ControlFlowExit(FLOW_RUNTIME_ADC);
+
+  return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
+}
+
+/*******************************************************************/
+/*!
  @brief     Returns the CLK test status. Includes minor filtering of transient errors
  @param     None
  @return    Status of the operation (eClassBRunStatus_PASS or eClassBRunStatus_FAIL)
@@ -375,7 +410,7 @@ tClassBRunStatus Runtime_CLKTest(bool Enabled)
   }
   else
   {
-    clck_sts = RunCLKTest(false);
+    clck_sts = ClassB_RunCLKTest(false);
   }
 
   ClassB_ControlFlowExit(FLOW_RUNTIME_CLK1);
@@ -403,13 +438,10 @@ tClassBRunStatus Runtime_WDGTest(bool Enabled)
 
   if (Enabled)
   {
-    IWDG_HandleTypeDef hiwdg = { 0 };
-    hiwdg.Instance = IWDG;
-    success = HAL_IWDG_Refresh(&hiwdg) == HAL_OK;
+    success = HAL_IWDG_Refresh(&hIWDG_APP) == HAL_OK;
 
     if (ClassB__GetFault(eClassBRunItem_WDG))
     {
-      // Force WDG failure by not refreshing
       success = false;
       ClassB__ClearFault(eClassBRunItem_WDG);
     }
@@ -523,7 +555,7 @@ tClassBRunStatus Runtime_FLOWTest(bool Enabled)
 
   if (!success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Control flow test failed");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Control flow test failed");
   }
 
   // Re-initialize control flow for next cycle

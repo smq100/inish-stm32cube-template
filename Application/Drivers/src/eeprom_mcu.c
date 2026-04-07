@@ -94,7 +94,7 @@ bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
 
   if (!success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to read EEPROM address 0x%08X", Address);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to read EEPROM address 0x%08X", Address);
   }
 
   return success;
@@ -140,7 +140,7 @@ bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
 
   if (!success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to write EEPROM address 0x%08X", Address);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to write EEPROM address 0x%08X", Address);
   }
 
   return success;
@@ -169,7 +169,7 @@ bool EEPROM_MCU_ReadReg(tEEPROM_Register Reg, uint32_t* Value)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to read EEPROM register %u", Reg);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to read EEPROM register %u", Reg);
     *Value = 0u;
   }
 
@@ -199,7 +199,7 @@ bool EEPROM_MCU_WriteReg(tEEPROM_Register Reg, uint32_t Value)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Failed to write EEPROM register %u", Reg);
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to write EEPROM register %u", Reg);
   }
 
   return success;
@@ -260,7 +260,7 @@ bool EEPROM_MCU_Erase(bool RegsOnly)
     }
     else
     {
-      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Error clearing EEPROM registers");
+      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Error clearing EEPROM registers");
     }
   }
   else

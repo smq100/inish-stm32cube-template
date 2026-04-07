@@ -41,8 +41,6 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-#define BOOT_UART_HANDLE &huart1 // UART used for ClassB boot messages
-
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/

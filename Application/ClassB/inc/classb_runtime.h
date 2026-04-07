@@ -53,6 +53,7 @@ typedef enum
   eClassBRunItem_CPU,
   eClassBRunItem_RAM,
   eClassBRunItem_CRC,
+  eClassBRunItem_ADC,
   eClassBRunItem_CLK,
   eClassBRunItem_WDG,
   eClassBRunItem_Stack,
@@ -64,15 +65,18 @@ typedef tClassBRunStatus(fnClassBHandler_Runtime)(bool Enabled);
 
 /* Exported constants --------------------------------------------------------*/
 /* Exported macros ------------------------------------------------------------*/
+
 /* Exported vars ------------------------------------------------------------ */
+
 /* Exported functions ------------------------------------------------------- */
 
 bool Runtime_Init(void);
 
 fnClassBHandler_Runtime Runtime_CPUTest;
 fnClassBHandler_Runtime Runtime_RAMTest;
-fnClassBHandler_Runtime Runtime_CLKTest;
 fnClassBHandler_Runtime Runtime_CRCTest;
+fnClassBHandler_Runtime Runtime_ADCTest;
+fnClassBHandler_Runtime Runtime_CLKTest;
 fnClassBHandler_Runtime Runtime_WDGTest;
 fnClassBHandler_Runtime Runtime_STKTest;
 fnClassBHandler_Runtime Runtime_FLOWTest;

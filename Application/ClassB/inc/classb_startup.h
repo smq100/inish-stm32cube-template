@@ -50,6 +50,7 @@ typedef enum
   eClassBStartItem_IWDG,
   eClassBStartItem_CRC,
   eClassBStartItem_CLK,
+  eClassBStartItem_ADC,
   eClassBStartItem_FLOW,
   eClassBStartItem_COMPLETE,
   eClassBStartItem_NUM,
@@ -58,8 +59,11 @@ typedef enum
 typedef bool(fnClassBHandler_Startup)(bool Enabled, uint32_t* Status);
 
 /* Exported constants --------------------------------------------------------*/
+
 /* Exported macros ------------------------------------------------------------*/
+
 /* Exported vars ------------------------------------------------------------ */
+
 /* Exported functions ------------------------------------------------------- */
 
 fnClassBHandler_Startup Start_Init1;
@@ -69,6 +73,7 @@ fnClassBHandler_Startup Start_CPUTest;
 fnClassBHandler_Startup Start_IWDGTest;
 fnClassBHandler_Startup Start_CRCTest;
 fnClassBHandler_Startup Start_CLKTest;
+fnClassBHandler_Startup Start_ADCTest;
 fnClassBHandler_Startup Start_FLOWTest;
 fnClassBHandler_Startup Start_Complete;
 

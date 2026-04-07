@@ -74,7 +74,7 @@ static const tLogLevel _LoggingLevel = LOGGING_DEFAULT_LEVEL;  //!< Default debu
 static const tLogLevel _LoggingLevel = eLogLevel_None;  //!< Default debug
 #endif
 
-static const UART_HandleTypeDef* _Handle[NUM_SERIAL_PORTS] = { &huart1, &huart2 };  //!< HAL UART handles for each port
+static const UART_HandleTypeDef* _Handle[NUM_SERIAL_PORTS] = { &hUART_DBG, &hUART_TECH };
 
 //! Rx write buffer size
 static uint32_t const _RxBufferSize[NUM_SERIAL_PORTS] = {

@@ -36,6 +36,8 @@
 #define SYSTEM_PROTECTED
 #define CLASSB_PROTECTED
 
+#include <ctype.h>
+
 #include "main.h"
 #include "classb.h"
 #include "version.h"
@@ -303,7 +305,7 @@ bool TECH_Init(void)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Not Initialized");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Not Initialized");
   }
 
   return _Runtime.Initialized;
@@ -517,7 +519,7 @@ static bool _Process(void)
         time = TIMER_GetTick();
 
         LOG_Write(
-          eLogger_Sys, eLogLevel_Warning, _Module, false, "CRC error: rx=0x%04X, calc=0x%04X", rx_crc, calc_crc);
+          eLogger_Sys, eLogLevel_Warning, _Module, true, "CRC error: rx=0x%04X, calc=0x%04X", rx_crc, calc_crc);
       }
     }
     else if (TIMER_GetElapsed_ms(time) > _Timeout_ms)

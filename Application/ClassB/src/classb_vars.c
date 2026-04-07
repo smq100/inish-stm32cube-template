@@ -258,7 +258,7 @@ static void _Vars_Fail(tClassBVars var)
     LOG_Write(eLogger_Sys,
               eLogLevel_Error,
               _Module,
-              false,
+              true,
               "ClassB var '%s' integrity failed (0x%X / 0x%X)",
               _Config[var].Name,
               ClassBData[var].U32,

@@ -40,13 +40,8 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
-#include <ctype.h>
-#include <math.h>
-#include <time.h>
-#include <limits.h>
-#include <assert.h>
 
-#include "main.h"
+#include "resources.h"
 
 /* Exported types ------------------------------------------------------------*/
 
@@ -123,12 +118,10 @@ typedef enum
 // which would cause watchdogs to trigger and interfere with debugging
 // #define TEST__ENABLE_DEBUG
 
-#define HW_IS_NUCLEO  ///< define if code compiled for white NUCLEO eval board
-
 #define NULLPTR ((void*)0)
 
-#define TIM10_FREQ 4000000u          ///< TIM10 freq is 4.0 MHz
-#define TIM4_FREQ 4000000u           ///< TIM4 freq is 4.0 MHz
+#define HW_IS_NUCLEO  ///< define if code compiled for white NUCLEO eval board
+
 #define HCTN_STARTUP_STEP_DELAY 250  ///< the msec delay between START-UP tests
 
 /* for structures with a safety 'magic' values */

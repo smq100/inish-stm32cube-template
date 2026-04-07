@@ -253,11 +253,11 @@ void TIM10_IRQHandler(void)
 void TIM11_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM11_IRQn 0 */
-  extern volatile bool tim11_sleep;
+  extern volatile bool tim_sleep;
   /* USER CODE END TIM11_IRQn 0 */
   HAL_TIM_IRQHandler(&htim11);
   /* USER CODE BEGIN TIM11_IRQn 1 */
-  tim11_sleep = false;
+  tim_sleep = false;
   /* USER CODE END TIM11_IRQn 1 */
 }
 

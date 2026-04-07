@@ -82,7 +82,7 @@ uint16_t TIMER_Init(void)
   }
   else
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, false, "Not Initialized");
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Not Initialized");
   }
 
   return TIMER_PERIOD_MS;

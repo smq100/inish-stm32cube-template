@@ -31,18 +31,19 @@
 
  ******************************************************************************/
 
-#include "main.h"
-
-#include "util.h"
-
 #include <stdarg.h>
 
-#include "usart.h"
+#include "stm32l1xx_ll_adc.h"
+
+#include "main.h"
+#include "util.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
+
 /* Public variables ----------------------------------------------------------*/
+
 /* Private variables ---------------------------------------------------------*/
 
 // clang-format off
@@ -86,6 +87,7 @@ static const uint16_t _Crc16CcittTable[256] = {
 static const uint32_t _Timeout_ms = 500;
 
 /* Private function prototypes -----------------------------------------------*/
+
 /* Public Implementation -----------------------------------------------------*/
 
 /*******************************************************************/
@@ -159,6 +161,48 @@ bool IsPointerValid(uintptr_t Addr)
 
 /*******************************************************************/
 /*!
+ @brief     Calculates VDDA in millivolts from the given VREFINT ADC value
+ @param     Measure: raw ADC value from VREFINT channel
+ @return    Calculated VDDA in millivolts
+*******************************************************************/
+int16_t CalcVDDA_mv(uint16_t Measure)
+{
+  int16_t vdda_mv = (int16_t)__LL_ADC_CALC_VREFANALOG_VOLTAGE((uint32_t)Measure, LL_ADC_RESOLUTION_12B);
+
+  return vdda_mv;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Calculates core temperature in deci-C from TSENSE and VREFINT ADC values
+ @param     TempData: raw ADC value from TSENSE channel
+ @param     VRefData: raw ADC value from VREFINT channel
+ @return    Calculated core temperature in deci-C
+*******************************************************************/
+int16_t CalcCoreTemp_Cx10(uint16_t TempData, uint16_t VRefData)
+{
+  const int32_t min_temp_deci_c = -400;  // -40.0 C
+  const int32_t max_temp_deci_c = 1500;  // 150.0 C
+
+  int16_t vdda_mv = CalcVDDA_mv(VRefData);
+  int32_t temperature_deci_c = __LL_ADC_CALC_TEMPERATURE(vdda_mv, (uint32_t)TempData, LL_ADC_RESOLUTION_12B);
+  temperature_deci_c *= 10;
+
+  // Clamp to plausible MCU die-temperature range to avoid wrap/NaN propagation.
+  if (temperature_deci_c < min_temp_deci_c)
+  {
+    temperature_deci_c = min_temp_deci_c;
+  }
+  else if (temperature_deci_c > max_temp_deci_c)
+  {
+    temperature_deci_c = max_temp_deci_c;
+  }
+
+  return temperature_deci_c;
+}
+
+/*******************************************************************/
+/*!
  @brief     Prints formatted string to UART for debugging
             This is a simple wrapper around HAL_UART_Transmit that formats
             a string with printf-like syntax. This is used for printing before
@@ -173,6 +217,6 @@ void print(const char* Fmt, ...)
   char buffer[256];
   vsnprintf(buffer, sizeof(buffer), Fmt, args);
 
-  HAL_UART_Transmit(BOOT_UART_HANDLE, (uint8_t*)buffer, strlen(buffer), _Timeout_ms);
+  HAL_UART_Transmit(&BOOT_UART_HANDLE, (uint8_t*)buffer, strlen(buffer), _Timeout_ms);
   va_end(args);
 }

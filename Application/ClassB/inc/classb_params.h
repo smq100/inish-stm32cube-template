@@ -37,7 +37,6 @@
 #define __CLASSB_PARAMS_H
 
 #include "main.h"
-#include "usart.h"
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
@@ -95,6 +94,12 @@ extern const uint32_t _Check_Sum;
 // Constants necessary for execution of transparent run time March tests
 #define CLASS_B_START ((uint32_t*)&__class_b_ram_start__)
 #define CLASS_B_END ((uint32_t*)&__class_b_ram_rev_end__)
+
+// ADC test limits
+#define CLASSB_ADC_VREF_LOW_MV ((int16_t)2700)      // Minimum VDDA in mV
+#define CLASSB_ADC_VREF_HIGH_MV ((int16_t)3600)     // Maximum VDDA in mV
+#define CLASSB_ADC_TEMP_LOW_DECIC ((int16_t)-400)   // Minimum MCU die temp in deci-°C (-40.0 °C)
+#define CLASSB_ADC_TEMP_HIGH_DECIC ((int16_t)1050)  // Maximum MCU die temp in deci-°C (+105.0 °C)
 
 /* Exported macros ------------------------------------------------------------*/
 

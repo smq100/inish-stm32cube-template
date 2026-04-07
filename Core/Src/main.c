@@ -228,7 +228,7 @@ static void RefreshWatchdogs(void)
     }
     else
     {
-      HAL_IWDG_Refresh(&hiwdg);
+      HAL_IWDG_Refresh(&hIWDG_APP);
     }
   }
 }
