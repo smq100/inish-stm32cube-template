@@ -64,6 +64,8 @@ typedef enum
 #define FLOW_START_CLK2 ((uint32_t)11)
 #define FLOW_START_CRC ((uint32_t)13)
 #define FLOW_START_ADC ((uint32_t)15)
+#define FLOW_START_ADC ((uint32_t)15)
+#define FLOW_START_UART ((uint32_t)17)
 
 #define FLOW_RUNTIME_CPU1 ((uint32_t)1)
 #define FLOW_RUNTIME_CPU2 ((uint32_t)3)  // Do not modify; hard coded in assembly file
@@ -87,21 +89,22 @@ typedef enum
   ( FLOW_START_CPU1 +       \
     FLOW_START_CPU2 +       \
     (2 * FLOW_START_IWDG) + \
+    FLOW_START_CRC +        \
     FLOW_START_CLK1 +       \
     FLOW_START_CLK2 +       \
-    FLOW_START_ADC +       \
-    FLOW_START_CRC )
+    FLOW_START_ADC +        \
+    FLOW_START_UART)
 
 #define CHECKPOINT_RUNTIME  \
   ( FLOW_RUNTIME_CPU1 +     \
     FLOW_RUNTIME_CPU2 +     \
+    FLOW_RUNTIME_CRC +      \
     FLOW_RUNTIME_RAM1 +     \
     FLOW_RUNTIME_RAM2 +     \
-    FLOW_RUNTIME_CRC +      \
-    FLOW_RUNTIME_WDG +      \
-    FLOW_RUNTIME_CLK1 +      \
-    FLOW_RUNTIME_CLK2 +      \
     FLOW_RUNTIME_ADC +      \
+    FLOW_RUNTIME_CLK1 +     \
+    FLOW_RUNTIME_CLK2 +     \
+    FLOW_RUNTIME_WDG +      \
     FLOW_RUNTIME_STACK)
 // clang-format on
 

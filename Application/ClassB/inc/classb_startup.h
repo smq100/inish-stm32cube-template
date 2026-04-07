@@ -51,6 +51,7 @@ typedef enum
   eClassBStartItem_CRC,
   eClassBStartItem_CLK,
   eClassBStartItem_ADC,
+  eClassBStartItem_UART,
   eClassBStartItem_FLOW,
   eClassBStartItem_COMPLETE,
   eClassBStartItem_NUM,
@@ -75,6 +76,7 @@ fnClassBHandler_Startup Start_CRCTest;
 fnClassBHandler_Startup Start_CLKTest;
 fnClassBHandler_Startup Start_ADCTest;
 fnClassBHandler_Startup Start_FLOWTest;
+fnClassBHandler_Startup Start_UARTTest;
 fnClassBHandler_Startup Start_Complete;
 
 #endif /* __CLASSB_STARTUP_H */

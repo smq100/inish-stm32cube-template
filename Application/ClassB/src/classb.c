@@ -51,28 +51,27 @@
 #include "stm32l1xx_ll_adc.h"
 
 /* Private typedef -----------------------------------------------------------*/
+
 typedef struct
 {
-  bool Enabled;
-  bool PreInit;
-  bool Always;
-  const char* Name;
-  fnClassBHandler_Startup* Handler;
+  bool Enabled;                      ///!< Indicates whether the startup test is enabled
+  bool PreInit;                      ///!< Indicates whether the test should run during pre-initialization
+  bool Always;                       ///!< Indicates whether the test should always run regardless of previous results
+  fnClassBHandler_Startup* Handler;  ///!< Function pointer to the test handler
+  const char* Name;                  ///!< Name of the startup test
 } tClassbStartConfig;
 
 typedef struct
 {
-  bool Enabled;
-  const char* Name;
+  bool Enabled;      ///!< Indicates whether the run test is enabled
+  const char* Name;  ///!< Name of the run test
 } tClassbRunConfig;
 
 /* Private define ------------------------------------------------------------*/
-
 /* Private macro -------------------------------------------------------------*/
-
 /* Public variables ----------------------------------------------------------*/
-
 /* Private variables ---------------------------------------------------------*/
+
 static const char* _Module = "CLSB";  //!< Module Name for debug logging
 
 static bool _FaultInjection[eClassBRunItem_NUM] = { false };  //!< Fault injection flags
@@ -80,22 +79,23 @@ static bool _FaultInjection[eClassBRunItem_NUM] = { false };  //!< Fault injecti
 // clang-format off
 // Order must match tClassBStartItem enum
 static const tClassbStartConfig _StartConfig[] = {
-  { true, true,  true,  "sInit1",     Start_Init1 },
-  { true, true,  false, "sInit2",     Start_Init2 },
-  { true, true,  false, "sRAM",       Start_RAMTest },
-  { true, true,  false, "sCPU",       Start_CPUTest },
+  { true, true,  true,  Start_Init1,     "sInit1" },
+  { true, true,  false, Start_Init2,     "sInit2" },
+  { true, true,  false, Start_RAMTest,   "sRAM" },
+  { true, true,  false, Start_CPUTest,   "sCPU" },
 
 #ifndef TEST__ENABLE_DEBUG
-  { true, false, false, "sIWDG",      Start_IWDGTest },
+  { true, false, false, Start_IWDGTest,  "sIWDG" },
 #else
-  { false, false, false, "sIWDG",      Start_IWDGTest },
+  { false, false, false, Start_IWDGTest, "sIWDG" },
 #endif
 
-  { true, false, false, "sCRC",       Start_CRCTest },
-  { true, false, false, "sCLK" ,      Start_CLKTest },
-  { true, false, false, "sADC" ,      Start_ADCTest },
-  { true, false, false, "sFlow",      Start_FLOWTest },
-  { true, false, true,  "sComplete",  Start_Complete },
+  { true, false, false, Start_CRCTest,   "sCRC" },
+  { true, false, false, Start_CLKTest,   "sCLK" },
+  { true, false, false, Start_ADCTest,   "sADC" },
+  { true, false, false, Start_UARTTest,  "sUART" },
+  { true, false, false, Start_FLOWTest,  "sFlow" },
+  { true, false, true,  Start_Complete,  "sComplete" },
 };
 
 // Order must match tClassBRunItem enum

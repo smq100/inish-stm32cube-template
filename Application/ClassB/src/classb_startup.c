@@ -394,6 +394,39 @@ bool Start_ADCTest(bool Enabled, uint32_t* Status)
 
 /*******************************************************************/
 /*!
+ @brief     Returns the ADC test status
+ @param     enabled: Indicates whether the test is enabled
+ @param     status: Pointer to store the test status
+ @return    Status indicating whether the test passed (true) or failed (false)
+ *******************************************************************/
+bool Start_UARTTest(bool Enabled, uint32_t* Status)
+{
+  assert(Status != NULL);
+
+  bool success = false;
+
+  ClassB_ControlFlowEnter(FLOW_START_UART);
+
+  if (!Enabled)
+  {
+    success = true;
+    printf("*** UART startup test disabled\n\r");
+  }
+  else
+  {
+    // TODO: Implement UART startup test
+    success = true;
+  }
+
+  *Status = success ? TEST_CLASSB_PASS : TEST_CLASSB_FAIL;
+
+  ClassB_ControlFlowExit(FLOW_START_UART);
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
  @brief     Returns the CLK test status
  @param     enabled: Indicates whether the test is enabled
  @param     status: Pointer to store the test status
