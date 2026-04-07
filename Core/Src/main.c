@@ -105,7 +105,7 @@ int main(void)
 
   bool vars_reset = ClassB_InitVars(false);
 
-  print("\r\nHello, World! (csr=0x%08X, vr=%d)\r\n", _ResetCause, vars_reset);
+  printf("\r\nHello, World! (csr=0x%08lX, vr=%d)\r\n", _ResetCause, vars_reset);
 
   // Pre-initialization ClassB tests
   ClassB_DoStartUpTests(true);

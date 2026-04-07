@@ -221,22 +221,22 @@ void ClassB_DoStartUpTests(bool PreInit)
     }
     else if (_StartTestStatus[i] == TEST_CLASSB_PASS && !_StartConfig[i].Always)
     {
-      print("Skipping startup test previously PASSED: %s\n\r", _StartConfig[i].Name);
+      printf("Skipping startup test previously PASSED: %s\n\r", _StartConfig[i].Name);
     }
     else if (_StartTestStatus[i] == TEST_CLASSB_FAIL && !_StartConfig[i].Always)
     {
-      print("Skipping startup test previously FAILED: %s\n\r", _StartConfig[i].Name);
+      printf("Skipping startup test previously FAILED: %s\n\r", _StartConfig[i].Name);
       break;
     }
     else
     {
-      print("Running startup test: %s (pre=%d)\n\r", _StartConfig[i].Name, PreInit);
+      printf("Running startup test: %s (pre=%d)\n\r", _StartConfig[i].Name, PreInit);
       bool success = _StartConfig[i].Handler(_StartConfig[i].Enabled, &_StartTestStatus[i]);
       _StartTestStatus[i] = success ? TEST_CLASSB_PASS : TEST_CLASSB_FAIL;
 
       if (success)
       {
-        print("Startup test PASSED: %s\n\r", _StartConfig[i].Name);
+        printf("Startup test PASSED: %s\n\r", _StartConfig[i].Name);
       }
       else
       {
@@ -290,7 +290,7 @@ bool ClassB_IsAllStartupPass(void)
 *******************************************************************/
 void ClassB_ExpireIWDG(void)
 {
-  print("Disabled IWDG. Waiting for reset...\r\n");
+  printf("Disabled IWDG. Waiting for reset...\r\n");
   _IwdgDisabled = true;
 }
 
@@ -337,7 +337,7 @@ void ClassB_PrintStatus(void)
         status_str = "UNKNOWN";
         break;
     }
-    print("ClassB Startup test '%s': %s\n\r", _StartConfig[i].Name, status_str);
+    printf("ClassB Startup test '%s': %s\n\r", _StartConfig[i].Name, status_str);
   }
 }
 
@@ -389,7 +389,7 @@ bool ClassB_IsRuntimeTestEnabled(tClassBRunItem Test, char* Name)
 *******************************************************************/
 void ClassB_Fail_Startup(tClassBStartItem Test)
 {
-  print("Startup test '%s' FAILED. Halting execution.\n\r", _StartConfig[Test].Name);
+  printf("Startup test '%s' FAILED. Halting execution.\n\r", _StartConfig[Test].Name);
 
   while (true)
   {
@@ -613,7 +613,7 @@ bool ClassB_RunADCTest(bool Startup)
   {
     if (Startup)
     {
-      print("ADC test FAIL: unable to reconfigure ADC\r\n");
+      printf("ADC test FAIL: unable to reconfigure ADC\r\n");
     }
     else
     {
@@ -628,14 +628,14 @@ bool ClassB_RunADCTest(bool Startup)
     ADC_ChannelConfTypeDef ch = { 0 };
     ch.Channel = ADC_CHANNEL_VREFINT;
     ch.Rank = ADC_REGULAR_RANK_1;
-    ch.SamplingTime = ADC_SAMPLETIME_96CYCLES;
+    ch.SamplingTime = ADC_SAMPLETIME_384CYCLES;
 
     if (HAL_ADC_ConfigChannel(&hADC_APP, &ch) != HAL_OK || HAL_ADC_Start(&hADC_APP) != HAL_OK ||
         HAL_ADC_PollForConversion(&hADC_APP, 10u) != HAL_OK)
     {
       if (Startup)
       {
-        print("ADC test FAIL: VREFINT read error\r\n");
+        printf("ADC test FAIL: VREFINT read error\r\n");
       }
       else
       {
@@ -656,14 +656,14 @@ bool ClassB_RunADCTest(bool Startup)
     ADC_ChannelConfTypeDef ch = { 0 };
     ch.Channel = ADC_CHANNEL_TEMPSENSOR;
     ch.Rank = ADC_REGULAR_RANK_1;
-    ch.SamplingTime = ADC_SAMPLETIME_96CYCLES;
+    ch.SamplingTime = ADC_SAMPLETIME_384CYCLES;
 
     if (HAL_ADC_ConfigChannel(&hADC_APP, &ch) != HAL_OK || HAL_ADC_Start(&hADC_APP) != HAL_OK ||
         HAL_ADC_PollForConversion(&hADC_APP, 10u) != HAL_OK)
     {
       if (Startup)
       {
-        print("ADC test FAIL: TEMPSENSOR read error\r\n");
+        printf("ADC test FAIL: TEMPSENSOR read error\r\n");
       }
       else
       {
@@ -692,10 +692,10 @@ bool ClassB_RunADCTest(bool Startup)
     {
       if (Startup)
       {
-        print("ADC test FAIL: Vref %d mV out of range [%d, %d]\r\n",
-              vdda_mv,
-              CLASSB_ADC_VREF_LOW_MV,
-              CLASSB_ADC_VREF_HIGH_MV);
+        printf("ADC test FAIL: Vref %d mV out of range [%d, %d]\r\n",
+               vdda_mv,
+               CLASSB_ADC_VREF_LOW_MV,
+               CLASSB_ADC_VREF_HIGH_MV);
       }
       else
       {
@@ -716,10 +716,10 @@ bool ClassB_RunADCTest(bool Startup)
     {
       if (Startup)
       {
-        print("ADC test FAIL: MCU temp %d deci-C out of range [%d, %d]\r\n",
-              temp_decic,
-              CLASSB_ADC_TEMP_LOW_DECIC,
-              CLASSB_ADC_TEMP_HIGH_DECIC);
+        printf("ADC test FAIL: MCU temp %d deci-C out of range [%d, %d]\r\n",
+               temp_decic,
+               CLASSB_ADC_TEMP_LOW_DECIC,
+               CLASSB_ADC_TEMP_HIGH_DECIC);
       }
       else
       {

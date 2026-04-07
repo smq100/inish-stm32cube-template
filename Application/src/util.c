@@ -203,20 +203,16 @@ int16_t CalcCoreTemp_Cx10(uint16_t TempData, uint16_t VRefData)
 
 /*******************************************************************/
 /*!
- @brief     Prints formatted string to UART for debugging
-            This is a simple wrapper around HAL_UART_Transmit that formats
-            a string with printf-like syntax. This is used for printing before
-            the main logger (log.c/h) is initialized, and for printing in critical failure
- @param     Fmt: format string (like printf)
- @return    None
+ @brief     Writes a character to UART for debugging
+            Overrides the weak __io_putchar function used by printf
+ @param     ch: character to write
+ @return    The character written
 *******************************************************************/
-void print(const char* Fmt, ...)
+int __io_putchar(int ch)
 {
-  va_list args;
-  va_start(args, Fmt);
-  char buffer[256];
-  vsnprintf(buffer, sizeof(buffer), Fmt, args);
+  uint8_t c = (uint8_t)ch;
 
-  HAL_UART_Transmit(&BOOT_UART_HANDLE, (uint8_t*)buffer, strlen(buffer), _Timeout_ms);
-  va_end(args);
+  HAL_UART_Transmit(&BOOT_UART_HANDLE, &c, 1u, _Timeout_ms);
+
+  return ch;
 }

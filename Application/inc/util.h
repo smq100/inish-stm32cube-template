@@ -46,10 +46,7 @@ uint16_t Calculate_CRC16(const void* Data, size_t Len);
 bool IsRAM(uintptr_t Addr);
 bool IsROM(uintptr_t Addr);
 bool IsPointerValid(uintptr_t Addr);
-
 int16_t CalcVDDA_mv(uint16_t Measure);
 int16_t CalcCoreTemp_Cx10(uint16_t TempData, uint16_t VRefData);
-
-void print(const char* Fmt, ...);
 
 #endif /* __UTIL_H */

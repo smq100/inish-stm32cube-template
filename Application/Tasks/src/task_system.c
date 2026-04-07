@@ -139,7 +139,7 @@ bool SYSTEM_Exec(void)
 
     if (_State == eSystemState_Error)
     {
-      print("Initialization failed during Init2\r\n");
+      printf("Initialization failed during Init2\r\n");
     }
   }
   else if (_State == eSystemState_Init3)
@@ -148,7 +148,7 @@ bool SYSTEM_Exec(void)
 
     if (_State == eSystemState_Error)
     {
-      print("Initialization failed during Init3\r\n");
+      printf("Initialization failed during Init3\r\n");
     }
   }
   else if (_State == eSystemState_Completed)

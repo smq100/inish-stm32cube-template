@@ -58,3 +58,12 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim)
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef* htim)
 {
 }
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+  if (hadc->Instance == ADC1)
+  {
+    extern volatile bool _ADCDMAComplete;
+    _ADCDMAComplete = true;
+  }
+}

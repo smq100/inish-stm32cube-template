@@ -266,7 +266,7 @@ bool TASK_Init(void)
       // Set the error bit
       _ErrorField |= (1 << task);
 
-      print("*** Error: Failed to initialize task '%s'\r\n", _Config[task].Name);  // Print msg to boot uart
+      printf("*** Error: Failed to initialize task '%s'\r\n", _Config[task].Name);  // Print msg to boot uart
     }
   }
 

@@ -518,8 +518,7 @@ static bool _Process(void)
         _Runtime.ErrorCode = eTechError_CRC;
         time = TIMER_GetTick();
 
-        LOG_Write(
-          eLogger_Sys, eLogLevel_Warning, _Module, true, "CRC error: rx=0x%04X, calc=0x%04X", rx_crc, calc_crc);
+        LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, true, "CRC error: rx=0x%04X, calc=0x%04X", rx_crc, calc_crc);
       }
     }
     else if (TIMER_GetElapsed_ms(time) > _Timeout_ms)

@@ -266,11 +266,10 @@ static void _Vars_Fail(tClassBVars var)
   }
   else
   {
-    // If logging is not initialized use the low-level print()
-    print("ClassB var '%s' integrity failed: 0x%X / 0x%X (0x%X)\n\r",
-          _Config[var].Name,
-          ClassBData[var].U32,
-          ClassBDataInv[var].U32,
-          ~ClassBDataInv[var].U32);
+    printf("ClassB var '%s' integrity failed: 0x%lX / 0x%lX (0x%lX)\n\r",
+           _Config[var].Name,
+           ClassBData[var].U32,
+           ClassBDataInv[var].U32,
+           ~ClassBDataInv[var].U32);
   }
 }

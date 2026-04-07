@@ -143,7 +143,7 @@ bool Start_RAMTest(bool Enabled, uint32_t* Status)
     ClassB_ControlFlowInit();
 
     // Can't do much here after destructive RAM test other than reboot
-    // Can't call print() as it uses RAM
+    // Can't call printf() as it uses RAM
     // Perform a system reset to reload the program and read back the result
     HAL_NVIC_SystemReset();
   }
@@ -182,7 +182,7 @@ bool Start_CPUTest(bool Enabled, uint32_t* Status)
 
   ClassB_ControlFlowExit(FLOW_START_CPU1);
 
-  print("Rebooting after CPU test...\n\r");
+  printf("Rebooting after CPU test...\n\r");
   (void)HAL_Delay(100);
   HAL_NVIC_SystemReset();
 
@@ -207,7 +207,7 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
   if (!Enabled)
   {
     ClassB_ControlFlowEnter(FLOW_START_IWDG);
-    print("*** IWDG startup test disabled\n\r");
+    printf("*** IWDG startup test disabled\n\r");
     *Status = TEST_CLASSB_PASS;
   }
   else if (*Status == TEST_CLASSB_NOINIT)
@@ -255,7 +255,7 @@ bool Start_CRCTest(bool Enabled, uint32_t* Status)
 
   if (!Enabled)
   {
-    print("*** CRC startup test disabled\n\r");
+    printf("*** CRC startup test disabled\n\r");
     *Status = TEST_CLASSB_PASS;
   }
   else
@@ -271,15 +271,15 @@ bool Start_CRCTest(bool Enabled, uint32_t* Status)
     }
     crc_result = CRC->DR;
 
-    print("Computed CRC=0x%08lX, Expected CRC=0x%08lX, debug=%s\n\r",
-          crc_result,
-          REF_CRC32,
-          is_debug_load ? "true" : "false");
+    printf("Computed CRC=0x%08lX, Expected CRC=0x%08lX, debug=%s\n\r",
+           crc_result,
+           REF_CRC32,
+           is_debug_load ? "true" : "false");
     if (is_debug_load)
     {
       // Debug load - CRC failure expected, don't fail the test
       *Status = TEST_CLASSB_PASS;
-      print("*** CRC check skipped (debug load)\n\r");
+      printf("*** CRC check skipped (debug load)\n\r");
     }
     else if (crc_result == REF_CRC32)
     {
@@ -326,23 +326,23 @@ bool Start_CLKTest(bool Enabled, uint32_t* Status)
   switch (clk_status)
   {
     case MCO_START_TIM_FAIL:
-      print("MCO start-up failure\n\r");
+      printf("MCO start-up failure\n\r");
       break;
 
     case SYSCLK_LOW:
-      print("System clock too low\n\r");
+      printf("System clock too low\n\r");
       break;
 
     case SYSCLK_HIGH:
-      print("System clock too high\n\r");
+      printf("System clock too high\n\r");
       break;
 
     case XCROSS_CONFIG_FAIL:
-      print("Clock Xcross measurement failure\n\r");
+      printf("Clock Xcross measurement failure\n\r");
       break;
 
     case VARS_CORRUPT:
-      print("Clock test variable corruption detected\n\r");
+      printf("Clock test variable corruption detected\n\r");
       break;
 
     case FREQ_OK:
@@ -350,7 +350,7 @@ bool Start_CLKTest(bool Enabled, uint32_t* Status)
       break;
 
     default:
-      print("Abnormal exit from clock test\n\r");
+      printf("Abnormal exit from clock test\n\r");
   }
 
   *Status = success ? TEST_CLASSB_PASS : TEST_CLASSB_FAIL;
@@ -378,7 +378,7 @@ bool Start_ADCTest(bool Enabled, uint32_t* Status)
   if (!Enabled)
   {
     success = true;
-    print("*** ADC startup test disabled\n\r");
+    printf("*** ADC startup test disabled\n\r");
   }
   else
   {
