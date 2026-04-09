@@ -203,6 +203,141 @@ int16_t CalcCoreTemp_Cx10(uint16_t TempData, uint16_t VRefData)
 
 /*******************************************************************/
 /*!
+ @brief     Reads memory from the given address into the provided buffer
+ @param     Addr: Address to read from
+ @param     Buffer: Buffer to store the read data
+ @param     Len: Length of the data to read (32 max)
+ @return    Number of bytes read
+*******************************************************************/
+uint8_t ReadMemory(uintptr_t Addr, uint8_t* Buffer, size_t Len)
+{
+  uint8_t read = 0;
+
+  if (Addr > 0x20020000)  // Ram end is 0x20020000 for 128KB of RAM, so any address above that is invalid
+  {
+    assert_always();
+  }
+  else if (Len > 0)
+  {
+    if (Len > MAX_MEMREAD_LEN)
+    {
+      Len = MAX_MEMREAD_LEN;  // Limit max read length
+    }
+
+    uint8_t* src = (uint8_t*)Addr;
+    for (size_t i = 0; i < Len; i++)
+    {
+      Buffer[i] = src[i];
+    }
+
+    read = (uint8_t)Len;
+  }
+
+  return read;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Writes a character to UART for debugging
+ @param     Label: Label to print before the hex dump
+ @param     Data: Pointer to the data to dump
+ @param     Len: Length of the data in bytes
+ @param     Buffer: Optional buffer to receive the string. If null, the output will be printed directly to the console
+ @param     BufferLen: Length of the buffer in bytes
+*******************************************************************/
+void DumpHex(const char* Label, const void* Data, size_t Len, char* Buffer, size_t BufferLen)
+{
+  const uint8_t* bytes = (const uint8_t*)Data;
+  size_t offset = 0;
+
+  if (!IsPointerValid((uintptr_t)Data) || Len == 0)
+  {
+    assert_always();
+  }
+  else if (!IsPointerValid((uintptr_t)Label))
+  {
+    assert_always();
+  }
+  else if (Buffer == NULLPTR)
+  {
+    printf("*** %s (addr=0x%08X, len=%u): ", Label, (uintptr_t)Data, Len);
+  }
+  else if (IsRAM((uintptr_t)Buffer) && BufferLen > 0)
+  {
+    snprintf(Buffer, BufferLen, "%s (addr=0x%08X, len=%u): ", Label, (uintptr_t)Data, Len);
+  }
+  else
+  {
+    Buffer = NULLPTR;  // Invalid buffer, fallback to direct print
+    assert_always();
+  }
+
+  while (offset < Len)
+  {
+    // Print hex
+    for (size_t i = 0; i < 16u; i++)
+    {
+      if (offset + i < Len)
+      {
+        if (Buffer == NULLPTR)
+        {
+          printf("%02X ", bytes[i]);
+        }
+        else
+        {
+          snprintf(Buffer + strlen(Buffer), BufferLen - strlen(Buffer), "%02X ", bytes[i]);
+        }
+      }
+      else
+      {
+        if (Buffer == NULLPTR)
+        {
+          printf("   ");
+        }
+        else
+        {
+          snprintf(Buffer + strlen(Buffer), BufferLen - strlen(Buffer), "   ");
+        }
+      }
+    }
+
+    // Print ASCII
+    if (Buffer == NULLPTR)
+    {
+      printf(" ");
+    }
+    else
+    {
+      snprintf(Buffer + strlen(Buffer), BufferLen - strlen(Buffer), " ");
+    }
+    for (size_t i = 0; i < 16u; i++)
+    {
+      if (offset + i < Len)
+      {
+        uint8_t b = bytes[i];
+        if (Buffer == NULLPTR)
+        {
+          printf("%c", (b >= 32u && b <= 126u) ? b : '.');
+        }
+        else
+        {
+          snprintf(Buffer + strlen(Buffer), BufferLen - strlen(Buffer), "%c", (b >= 32u && b <= 126u) ? b : '.');
+        }
+      }
+    }
+
+    if (Buffer == NULLPTR)
+    {
+      printf("\n");
+    }
+
+    offset += 16u;
+    bytes += 16u;
+  }
+}
+
+/*******************************************************************/
+/*!
  @brief     Writes a character to UART for debugging
             Overrides the weak __io_putchar function used by printf
  @param     ch: character to write

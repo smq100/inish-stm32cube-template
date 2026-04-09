@@ -247,6 +247,8 @@ void SYSTEM_SetStatusLED(tStatusLEDState State, uint8_t ErrorCode)
  *******************************************************************/
 void SYSTEM_FactoryReset(void)
 {
+  LOG_WriteDirect(eLogger_Sys, eLogLevel_Warning, _Module, true, "Factory reset initiated");
+
   // Reset the system logs (which also resets the log index in EXT EEPROM)
   LOG_Reset(eLogger_Sys, true);
   LOG_Reset(eLogger_Tech, false);
@@ -256,12 +258,6 @@ void SYSTEM_FactoryReset(void)
 
   // Reset the external EEPROM (where logs are stored) to all 0xFF to indicate empty
   EEPROM_EXT_Erase();
-
-  // Reset the first byte of the model table to force model validation fails reset defaults on next boot
-  uint8_t ff = 0xFF;
-  EEPROM_MCU_Write(EEPROM_MODEL_TABLE_ADDR, &ff, 1);
-
-  LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, true, "Factory reset initiated");
 
   SYSTEM__BeginShutdown(1500);
 }
@@ -431,7 +427,7 @@ static bool _Init3(void)
 
   LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "CPU ID: %X, Clock: %.2f MHz", SCB->CPUID, _CoreClkFreq / 1e6);
   LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "CPU RAM: %uk, Flash: %uk", _RAM_kb, _ROM_kb);
-  LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "HW: %lu, FW: %s (%s)", _HardwareRev, FW_REV_STR, FW_DATE_STR);
+  LOG_Write(eLogger_Sys, eLogLevel_High, _Module, true, "HW: %lu, FW: %s (%s)", _HardwareRev, FW_REV_STR, FW_DATE_STR);
 
   ClassB_PrintErrorCounts();
 

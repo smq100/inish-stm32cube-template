@@ -79,10 +79,7 @@ bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
   {
     assert_always();
   }
-  else if (!_IsAddressValid(Address, Length))
-  {
-  }
-  else
+  else if (_IsAddressValid(Address, Length))
   {
     for (uint32_t i = 0; i < Length; i++)
     {
@@ -92,9 +89,13 @@ bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
     success = true;
   }
 
-  if (!success)
+  if (success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to read EEPROM address 0x%08X", Address);
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "Read EEPROM 0x%08X (%lu bytes)", Address, Length);
+  }
+  else
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to read EEPROM 0x%08X", Address);
   }
 
   return success;
@@ -106,9 +107,10 @@ bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length)
  @param     address: Absolute EEPROM address
  @param     data: Source buffer
  @param     length: Number of bytes to write
+ @param     verify: If true, read back and verify the written data
  @return    true if successful
  *******************************************************************/
-bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
+bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length, bool Verify)
 {
   bool success = false;
 
@@ -136,11 +138,36 @@ bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length)
     }
 
     success = (HAL_FLASHEx_DATAEEPROM_Lock() == HAL_OK) && success;
+
+    if (Verify && success)
+    {
+      uint8_t verifyData[Length];
+      if (!EEPROM_MCU_Read(Address, verifyData, Length))
+      {
+        success = false;
+      }
+      else
+      {
+        for (uint32_t i = 0; i < Length; i++)
+        {
+          if (verifyData[i] != Data[i])
+          {
+            success = false;
+            LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Write verify failed");
+            break;
+          }
+        }
+      }
+    }
   }
 
-  if (!success)
+  if (success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to write EEPROM address 0x%08X", Address);
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "Wrote EEPROM 0x%08X (%lu bytes)", Address, Length);
+  }
+  else
+  {
+    LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to write EEPROM 0x%08X", Address);
   }
 
   return success;
@@ -358,7 +385,7 @@ static bool _WriteU32(uint32_t Address, uint32_t Value)
   buf[2] = (uint8_t)((Value >> 16) & 0xFFu);
   buf[3] = (uint8_t)((Value >> 24) & 0xFFu);
 
-  return EEPROM_MCU_Write(Address, buf, sizeof(buf));
+  return EEPROM_MCU_Write(Address, buf, sizeof(buf), false);
 }
 
 /*******************************************************************/

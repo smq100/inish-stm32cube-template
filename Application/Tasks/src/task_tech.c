@@ -76,6 +76,7 @@ typedef enum
   eTechCommand_Tasks,         ///< Provide tasks data
   eTechCommand_Get,           ///< Provide DAQ data
   eTechCommand_Set,           ///< Modify DAQ data
+  eTechCommand_ReadMemory,    ///< Read memory data
   eTechCommand_GetLog,        ///< Retrieve log data
   eTechCommand_StreamItems,   ///< Specifiy items needed for the stream
   eTechCommand_StreamStart,   ///< Set up streaming output
@@ -123,7 +124,7 @@ typedef struct
 {
   bool Enabled;        //!< Enabled when true
   bool Streamable;     //!< True if streamable
-  bool AuthRequired;   //!< True if command requires authentication (and auth is enabled)
+  bool AuthReq;        //!< True if command requires authentication (and auth is enabled)
   char* Name;          //!< Name of the command
   fnHandler* Handler;  //!< Command handler
 } tConfig;
@@ -177,6 +178,7 @@ static const fnHandler _Handler_Meta;
 static const fnHandler _Handler_Tasks;
 static const fnHandler _Handler_Get;
 static const fnHandler _Handler_Set;
+static const fnHandler _Handler_ReadMemory;
 static const fnHandler _Handler_GetLog;
 static const fnHandler _Handler_StreamStart;
 static const fnHandler _Handler_StreamItems;
@@ -214,20 +216,21 @@ static const uint32_t _MaxResponseSize = RESPONSE_BUFFER_SIZE - 1;  ///< Size of
 // clang-format off
 //! Tech commands and associated handlers
 static const tConfig _Config[] = {
-  { .Enabled = true, .AuthRequired = false, .Streamable = false, .Name = "help", .Handler = _Handler_Help },
-  { .Enabled = true, .AuthRequired = false, .Streamable = false, .Name = "auth", .Handler = _Handler_Auth },
-  { .Enabled = true, .AuthRequired = false, .Streamable = false, .Name = "sys", .Handler = _Handler_System },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "reboot", .Handler = _Handler_Reboot },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "reset", .Handler = _Handler_Reset },
-  { .Enabled = true, .AuthRequired = false, .Streamable = false, .Name = "meta", .Handler = _Handler_Meta },
-  { .Enabled = true, .AuthRequired = false, .Streamable = false, .Name = "tasks", .Handler = _Handler_Tasks },
-  { .Enabled = true, .AuthRequired = false, .Streamable = true, .Name = "get", .Handler = _Handler_Get },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "set", .Handler = _Handler_Set },
-  { .Enabled = true, .AuthRequired = false, .Streamable = false, .Name = "log", .Handler = _Handler_GetLog },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "sitems", .Handler = _Handler_StreamItems },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "sstart", .Handler = _Handler_StreamStart },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "sstop", .Handler = _Handler_StreamStop },
-  { .Enabled = true, .AuthRequired = true, .Streamable = false, .Name = "fault", .Handler = _Handler_Fault },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "help", .Handler = _Handler_Help },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "auth", .Handler = _Handler_Auth },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "sys", .Handler = _Handler_System },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "reboot", .Handler = _Handler_Reboot },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "reset", .Handler = _Handler_Reset },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "meta", .Handler = _Handler_Meta },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "tasks", .Handler = _Handler_Tasks },
+  { .Enabled = true, .AuthReq = false, .Streamable = true, .Name = "get", .Handler = _Handler_Get },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "set", .Handler = _Handler_Set },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "readmem", .Handler = _Handler_ReadMemory },
+  { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "log", .Handler = _Handler_GetLog },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "sitems", .Handler = _Handler_StreamItems },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "sstart", .Handler = _Handler_StreamStart },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "sstop", .Handler = _Handler_StreamStop },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "fault", .Handler = _Handler_Fault },
 };
 
 static_assert(NUM_TECH_COMMANDS == (sizeof(_Config) / sizeof(tConfig)), "TECH command config size mismatch");
@@ -552,7 +555,7 @@ static bool _Process(void)
       _Runtime.State = eTechState_Error;
       _Runtime.ErrorCode = eTechError_Disabled;
     }
-    else if (_Config[_Runtime.ActiveCommand].AuthRequired && !_Runtime.Authenticated)
+    else if (_Config[_Runtime.ActiveCommand].AuthReq && !_Runtime.Authenticated)
     {
       _Runtime.State = eTechState_Error;
       _Runtime.ErrorCode = eTechError_Auth;
@@ -1299,6 +1302,63 @@ static bool _Handler_Set(char* StreamTokens)
       val.Float = value;
 
       success = DAQ_WriteItem((tDAQ_Entry)entry, 0, val);
+    }
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Command handler for 'readmem' command
+ @param     StreamTokens: command parameters if streaming (not used for this command)
+ @return    True if successful
+
+ @note      Only numeric values allowed. No strings or pointers
+ *******************************************************************/
+static bool _Handler_ReadMemory(char* StreamTokens)
+{
+  bool success = false;
+  int items;
+  uint32_t address, len;
+
+  // Scan for hex address and number of bytes to read. Address must be in hex, value must be numeric
+  items = sscanf(_Tokens[1], "%lx,%lu", &address, &len);
+
+  if (items < 2)
+  {
+    // Invalid format
+  }
+  else if (len == 0)
+  {
+    // Invalid length
+  }
+  else
+  {
+    if (len > MAX_MEMREAD_LEN)
+    {
+      // Too many bytes requested to read
+      len = MAX_MEMREAD_LEN;
+    }
+
+    // Read memory and build response string
+    uint8_t buffer[MAX_MEMREAD_LEN];
+    if (ReadMemory((uintptr_t)address, buffer, len) > 0)
+    {
+      char output[RESPONSE_BUFFER_SIZE];
+      char data[RESPONSE_BUFFER_SIZE];
+      char* ptr = data;
+
+      // Fill text buffer with LSB on the right (little-endian format)
+      for (int32_t i = len - 1; i >= 0; i--)
+      {
+        ptr += sprintf(ptr, "%02X", buffer[i]);
+      }
+
+      snprintf(output, _MaxResponseSize, "\"address\":%08lX,\"data\":\"%s\"", address, data);
+      strncpy(_ResponseBuffer, output, _MaxResponseSize);
+
+      success = true;
     }
   }
 

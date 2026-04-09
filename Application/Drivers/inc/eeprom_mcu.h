@@ -67,8 +67,6 @@ typedef enum
 #define EEPROM_MCU_ENDADDR FLASH_EEPROM_END                                    ///< 0x08081FFF
 #define EEPROM_MCU_SIZE_BYTES (EEPROM_MCU_ENDADDR - EEPROM_MCU_BASEADDR + 1u)  ///< 8192 bytes
 
-#define EEPROM_MODEL_TABLE_ADDR (EEPROM_MCU_BASEADDR + 0x200u)  ///< Start of model table in EEPROM (after registers)
-
 /* Exported macros ------------------------------------------------------------*/
 
 /* Exported vars ------------------------------------------------------------ */
@@ -76,7 +74,7 @@ typedef enum
 /* Exported functions ------------------------------------------------------- */
 
 bool EEPROM_MCU_Read(uint32_t Address, uint8_t* Data, uint32_t Length);
-bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length);
+bool EEPROM_MCU_Write(uint32_t Address, const uint8_t* Data, uint32_t Length, bool Verify);
 bool EEPROM_MCU_ReadReg(tEEPROM_Register Reg, uint32_t* Value);
 bool EEPROM_MCU_WriteReg(tEEPROM_Register Reg, uint32_t Value);
 bool EEPROM_MCU_IncrementReg(tEEPROM_Register Reg);

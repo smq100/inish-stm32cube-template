@@ -56,7 +56,7 @@ typedef struct
 /* Private define ------------------------------------------------------------*/
 
 #define BUFFER_DEBUG_RX_SZ 8  // No Rx on debug port
-#define BUFFER_DEBUG_TX_SZ 2048
+#define BUFFER_DEBUG_TX_SZ 3072
 #define BUFFER_TECH_RX_SZ 2048
 #define BUFFER_TECH_TX_SZ 2048
 

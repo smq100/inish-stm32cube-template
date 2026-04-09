@@ -38,6 +38,9 @@
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
+
+#define MAX_MEMREAD_LEN 32  // Max length for memory read and hex dump functions
+
 /* Exported macros ------------------------------------------------------------*/
 /* Exported vars ------------------------------------------------------------ */
 /* Exported functions ------------------------------------------------------- */
@@ -48,5 +51,7 @@ bool IsROM(uintptr_t Addr);
 bool IsPointerValid(uintptr_t Addr);
 int16_t CalcVDDA_mv(uint16_t Measure);
 int16_t CalcCoreTemp_Cx10(uint16_t TempData, uint16_t VRefData);
+uint8_t ReadMemory(uintptr_t Addr, uint8_t* Buffer, size_t Len);
+void DumpHex(const char* Label, const void* Data, size_t Len, char* Buffers, size_t BufferLen);
 
 #endif /* __UTIL_H */

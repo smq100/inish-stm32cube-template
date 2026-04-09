@@ -325,7 +325,7 @@ bool EEPROM_EXT_WriteLog(uint32_t Index, const uint8_t* Log)
 
   if (success)
   {
-    LOG_Write(eLogger_Sys, eLogLevel_Med, _Module, false, "Wrote log entry %u to EXT EEPROM", Index);
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "Wrote log entry %u to EXT EEPROM", Index);
   }
   else
   {

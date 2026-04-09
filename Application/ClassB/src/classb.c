@@ -781,7 +781,7 @@ void ClassB_PrintErrorCounts(void)
   LOG_Write(eLogger_Sys,
             eLogLevel_High,
             _Module,
-            false,
+            true,
             "ClassB Errors: CPU=%lu, RAM=%lu, CRC=%lu,  ADC=%lu, CLK=%lu, WDG=%lu, STK=%lu, FLO=%lu",
             cpu_errors,
             ram_errors,
