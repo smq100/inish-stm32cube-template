@@ -123,6 +123,7 @@ when printed.
 #include "task_serial.h"
 #include "task_daq.h"
 #include "task_classb.h"
+#include "task_app.h"
 #include "task_tech.h"
 #include "task_buttons.h"
 #include "task_led.h"
@@ -174,13 +175,14 @@ static const uint32_t _PrintDebugInterval_ms = 0;  //!< Print debug interval in 
 // 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331
 //! Task configuration defaults (order must match tTaskConfig enum)
 static const tTaskConfig _Defaults[] = {
-  { true, SYSTEM_Init, SYSTEM_Exec, SYSTEM_Shutdown, SYSTEM_Test, 23, 0, "SYS" },    // eTask_System
-  { true, SERIAL_Init, SERIAL_Exec, SERIAL_Shutdown, SERIAL_Test, 7, 0, "SER" },     // eTask_Serial
-  { true, DAQ_Init, DAQ_Exec, DAQ_Shutdown, DAQ_Test, 9, 0, "DAQ" },                 // eTask_DAQ
-  { true, TECH_Init, TECH_Exec, TECH_Shutdown, TECH_Test, 13, 0, "TECH" },           // eTask_Tech
-  { true, BUTTON_Init, BUTTON_Exec, BUTTON_Shutdown, BUTTON_Test, 11, 0, "BTN" },    // eTask_Buttons
-  { true, LED_Init, LED_Exec, LED_Shutdown, LED_Test, 31, 0, "LED" },                // eTask_LED
-  { true, CLASSB_Init, CLASSB_Exec, CLASSB_Shutdown, CLASSB_Test, 251, 0, "CLSB" },  // eTask_ClassB
+  { true, SYSTEM_Init, SYSTEM_Exec, SYSTEM_Shutdown, SYSTEM_Test, 23, 0, "SYS" },   // eTask_System
+  { true, SERIAL_Init, SERIAL_Exec, SERIAL_Shutdown, SERIAL_Test, 7, 0, "SER" },    // eTask_Serial
+  { true, DAQ_Init, DAQ_Exec, DAQ_Shutdown, DAQ_Test, 9, 0, "DAQ" },                // eTask_DAQ
+  { true, TECH_Init, TECH_Exec, TECH_Shutdown, TECH_Test, 13, 0, "TECH" },          // eTask_Tech
+  { true, BUTTON_Init, BUTTON_Exec, BUTTON_Shutdown, BUTTON_Test, 11, 0, "BTN" },   // eTask_Buttons
+  { true, LED_Init, LED_Exec, LED_Shutdown, LED_Test, 31, 0, "LED" },               // eTask_LED
+  { true, CLASSB_Init, CLASSB_Exec, CLASSB_Shutdown, CLASSB_Test, 37, 0, "CLSB" },  // eTask_ClassB
+  { true, APP_Init, APP_Exec, APP_Shutdown, APP_Test, 5, 0, "APP" },                // eTask_App
 };
 
 static_assert(sizeof(_Defaults) / sizeof(tTaskConfig) == eTask_NUM, "tTaskConfig size mismatch");

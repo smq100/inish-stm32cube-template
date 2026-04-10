@@ -36,6 +36,7 @@
 #define CLASSB_PROTECTED
 
 #include "main.h"
+#include "task_app.h"
 #include "classb.h"
 #include "classb_runtime.h"
 #include "classb_params.h"
@@ -519,6 +520,28 @@ tClassBRunStatus Runtime_STKTest(bool Enabled)
     // Persist error counts
     EEPROM_MCU_IncrementReg(eEEPROM_Reg_ClassBError_Stack);
   }
+
+  return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Returns the Stack test status
+ @param     None
+ @return    Status of the operation (eClassBRunStatus_PASS or eClassBRunStatus_FAIL)
+ *******************************************************************/
+tClassBRunStatus Runtime_APPTest(bool Enabled)
+{
+  bool success = true;
+
+  ClassB_ControlFlowEnter(FLOW_RUNTIME_APP);
+
+  if (Enabled)
+  {
+    success = APP_ClassBTest();
+  }
+
+  ClassB_ControlFlowExit(FLOW_RUNTIME_APP);
 
   return success ? eClassBRunStatus_PASS : eClassBRunStatus_FAIL;
 }

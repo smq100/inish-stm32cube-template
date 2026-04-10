@@ -64,11 +64,15 @@ typedef struct
 
 typedef struct
 {
+  tGPIOConfig GPIO;  //!< GPIO port and pin of the LED
   bool OnPolarityH;  //!< Level for LED on
+  const char* Name;  //!< Name of the LED for debug logging
 } tLEDConfig;
 
 /* Private macro -------------------------------------------------------------*/
+
 /* Public variables ----------------------------------------------------------*/
+
 /* Private variables ---------------------------------------------------------*/
 
 static const char* _Module = "T_LED";                //!< Module name for debug logging
@@ -78,16 +82,14 @@ static const uint8_t _MaxKeyLength = MAX_KEYLENGTH;  //!< The max keylength of a
 static const bool _DisableLocking = true;            //!< True when locking LED is disabled
 
 static const tLEDConfig _Config[] = {
-  { .OnPolarityH = true },
-};
-
-//! LED GPIO configuration
-static const tGPIOConfig _GPIO[] = {
-  { LED_STATUS_GPIO_Port, LED_STATUS_Pin },
+#ifdef HW_IS_NUCLEO
+  { .GPIO = { LED_STATUS_GPIO_Port, LED_STATUS_Pin }, .OnPolarityH = true, .Name = "Status" },
+#else
+  { .GPIO = { LED_STATUS_GPIO_Port, LED_STATUS_Pin }, .OnPolarityH = false, .Name = "Status" },
+#endif
 };
 
 static_assert(sizeof(_Config) / sizeof(_Config[0]) == eLED_NUM, "tLEDConfig size mismatch");
-static_assert(sizeof(_GPIO) / sizeof(_GPIO[0]) == eLED_NUM, "tGPIOConfig size mismatch");
 
 static bool _Initialized = false;       //!< True when module is initialized
 static bool _Testing = false;           //!< True during POST
@@ -233,11 +235,13 @@ bool LED_OnOff(tLED led, bool On, const char* Key)
   {
     // LED is unlocked
     _OnOff(led, On);
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "LED '%s': %s", _Config[led].Name, On ? "ON" : "OFF");
   }
   else if (strncmp(_Runtime[led].Key, Key, _MaxKeyLength) == 0)
   {
     // Keys match
     _OnOff(led, On);
+    LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "LED '%s': %s", _Config[led].Name, On ? "ON" : "OFF");
   }
 
   return success;
@@ -494,7 +498,7 @@ static void _OnOff(tLED led, bool On)
       _Runtime[led].Flash.PulsesRemain = -1;
     }
 
-    HAL_GPIO_WritePin(_GPIO[led].Port, _GPIO[led].Pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(_Config[led].GPIO.Port, _Config[led].GPIO.Pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
     _Runtime[led].Lit = On;
 
@@ -507,7 +511,7 @@ static void _OnOff(tLED led, bool On)
 
 /*******************************************************************/
 /*!
- @brief     Process flashing
+ @brief     Process flashing or pulsing
  @param     led: The selected LED
  *******************************************************************/
 static void _ProcessEffects(tLED led)
@@ -533,13 +537,9 @@ static void _ProcessEffects(tLED led)
         // Refresh pulse data
         _Runtime[led].Flash.PulsesRemain = _Runtime[led].Flash.Pulses;
         _Runtime[led].Flash.PulseTime = TIMER_GetTick();
+      }
 
-        _ToggleFlash(led);
-      }
-      else
-      {
-        _ToggleFlash(led);
-      }
+      _ToggleFlash(led);
     }
     else if (_Runtime[led].Flash.Qty > 0)
     {
@@ -549,21 +549,14 @@ static void _ProcessEffects(tLED led)
         // Refresh pulse data
         _Runtime[led].Flash.PulsesRemain = _Runtime[led].Flash.Pulses;
         _Runtime[led].Flash.PulseTime = TIMER_GetTick();
-
-        _ToggleFlash(led);
-
         _Runtime[led].Flash.Qty--;
       }
-      else
+      else if (_Runtime[led].Flash.Lit)  // Update remaining
       {
-        _ToggleFlash(led);
-
-        // Update remaining
-        if (_Runtime[led].Flash.Lit)
-        {
-          _Runtime[led].Flash.Qty--;
-        }
+        _Runtime[led].Flash.Qty--;
       }
+
+      _ToggleFlash(led);
     }
     else
     {
@@ -617,7 +610,7 @@ static void _ToggleFlash(tLED led)
     on = !_Runtime[led].Flash.Lit;
     level = on ? _Config[led].OnPolarityH : !_Config[led].OnPolarityH;
 
-    HAL_GPIO_WritePin(_GPIO[led].Port, _GPIO[led].Pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(_Config[led].GPIO.Port, _Config[led].GPIO.Pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
     _Runtime[led].Flash.Lit = on;
   }

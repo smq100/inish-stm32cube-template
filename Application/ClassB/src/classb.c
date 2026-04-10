@@ -114,6 +114,7 @@ static const tClassbRunConfig _RunConfig[] = {
 #endif
 
   { true, "rStack" },
+  { true, "rApp" },
   { true, "rFlow" },
 };
 // clang-format on

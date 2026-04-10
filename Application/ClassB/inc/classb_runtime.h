@@ -57,6 +57,7 @@ typedef enum
   eClassBRunItem_CLK,
   eClassBRunItem_WDG,
   eClassBRunItem_Stack,
+  eClassBRunItem_App,
   eClassBRunItem_Flow,
   eClassBRunItem_NUM
 } tClassBRunItem;
@@ -79,6 +80,7 @@ fnClassBHandler_Runtime Runtime_ADCTest;
 fnClassBHandler_Runtime Runtime_CLKTest;
 fnClassBHandler_Runtime Runtime_WDGTest;
 fnClassBHandler_Runtime Runtime_STKTest;
+fnClassBHandler_Runtime Runtime_APPTest;
 fnClassBHandler_Runtime Runtime_FLOWTest;
 
 bool asm_RuntimeCPUTest(void);

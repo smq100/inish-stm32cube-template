@@ -44,7 +44,6 @@ typedef enum
   eStatusLED_Init,    ///< Initial state during system startup
   eStatusLED_Normal,  ///< Normal operation (heartbeat)
   eStatusLED_Error,   ///< Error state
-  eStatusLED_Bypass,  ///< Someone else is controlling the LED (e.g. ClassB)
   eStatusLED_NUM,     ///< Number of status LED states
 } tStatusLEDState;
 

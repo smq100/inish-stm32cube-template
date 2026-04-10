@@ -925,6 +925,7 @@ static bool _Handler_Help(char* StreamTokens)
   _WriteMessage("The following commands are available:", true);
   _WriteMessage("help          Displays this help message", true);
   _WriteMessage("auth user,pw  Authenticates the user", true);
+  _WriteMessage("meta (n)      Returns a DAQ item metadata. n=DAQ index, or interface metadata if none", true);
   _WriteMessage("reboot (n)    Reboots the system. n=optional delay in ms", true);
   _WriteMessage("reset         Resets all settings to factory defaults (system will reboot)", true);
   _WriteMessage("meta (n)      Returns a DAQ item metadata. n=DAQ index, or interface metadata if none", true);
@@ -932,9 +933,10 @@ static bool _Handler_Help(char* StreamTokens)
   _WriteMessage("get n(,m)     Returns a DAQ value. n=item, m=optional subitems (no spaces between items)", true);
   _WriteMessage("set n,v       Set a DAQ value. n=DAQ item, v=numeric value (not all items modifiable)", true);
   _WriteMessage("log n         Returns log information. n=log index", true);
-  _WriteMessage("fault n       Simulate a fault condition. n=fault code", true);
-  _WriteMessage("emul (n)      Set/get enable emulation mode. if n=1, set to enable", true);
-  _WriteMessage("\nAll commands begin with a '*', end with a ';' and require a #CRC16 (#0000 to ignore)\n", true);
+  _WriteMessage("sitems n[m]   Specify items for DAQ streaming", true);
+  _WriteMessage("sstart get,f  Start DAQ streaming. 'get'=cmd (only 'get' is supported), f=frequency in Hz", true);
+  _WriteMessage("sstop         Stop DAQ streaming", true);
+  _WriteMessage("fault n       Simulate a ClassB fault condition. n=fault code", true);
 
   return true;
 }
@@ -1011,7 +1013,6 @@ static bool _Handler_System(char* StreamTokens)
  *******************************************************************/
 static bool _Handler_Reboot(char* StreamTokens)
 {
-  bool success = false;
   int items;
   uint16_t entry;
 
@@ -1028,7 +1029,7 @@ static bool _Handler_Reboot(char* StreamTokens)
     SYSTEM__BeginShutdown(entry);
   }
 
-  return success;
+  return true;
 }
 
 /*******************************************************************/
@@ -1589,14 +1590,14 @@ static bool _Handler_StreamStart(char* StreamTokens)
         }
         else
         {
-          // No items
+          LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, true, "No stream items specified.");
         }
 
         break;
       }
       else
       {
-        // Not streamable
+        LOG_Write(eLogger_Sys, eLogLevel_Warning, _Module, true, "Command '%s' is not streamable.", command);
         break;
       }
     }

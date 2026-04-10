@@ -77,6 +77,7 @@ typedef enum
 #define FLOW_RUNTIME_CLK2 ((uint32_t)15)
 #define FLOW_RUNTIME_ADC ((uint32_t)17)
 #define FLOW_RUNTIME_STACK ((uint32_t)19)
+#define FLOW_RUNTIME_APP ((uint32_t)21)
 
 #define TEST_CLASSB_NOINIT ((uint32_t)0x33333333)
 #define TEST_CLASSB_INPROGRESS ((uint32_t)0x55555555)
@@ -105,7 +106,8 @@ typedef enum
     FLOW_RUNTIME_CLK1 +     \
     FLOW_RUNTIME_CLK2 +     \
     FLOW_RUNTIME_WDG +      \
-    FLOW_RUNTIME_STACK)
+    FLOW_RUNTIME_STACK +    \
+    FLOW_RUNTIME_APP)
 // clang-format on
 
 /* Exported macros ------------------------------------------------------------*/

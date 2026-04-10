@@ -49,6 +49,8 @@ fnTaskExec APP_Exec;
 fnTaskShutdown APP_Shutdown;
 fnTaskTest APP_Test;
 
+bool APP_ClassBTest(void);
+
 #ifdef TASK_APP_PROTECTED
 
 #endif /* TASK_APP_PROTECTED */

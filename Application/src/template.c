@@ -55,7 +55,7 @@ static uint32_t _Private = 1ul;           //!< Example of a private variable
 
 /* Private function prototypes -----------------------------------------------*/
 
-static void _PrivateFunction(void);
+static void _BtnCallback(void);
 
 /* Public Implementation -----------------------------------------------------*/
 
@@ -71,7 +71,7 @@ uint32_t TEMPLATE_Function(tTemplate_ID Param)
 
   uint32_t local_var = _Private + 1;
 
-  _PrivateFunction();
+  _BtnCallback();
 
   LOG_Write(eLogger_Sys, eLogLevel_Debug, _Module, false, "Param=%u, returning %u", Param, local_var);
 
@@ -86,7 +86,7 @@ uint32_t TEMPLATE_Function(tTemplate_ID Param)
  @param None
  @retval None
 ********************************************************************/
-static void _PrivateFunction(void)
+static void _BtnCallback(void)
 {
 }
 

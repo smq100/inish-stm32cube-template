@@ -50,6 +50,7 @@ typedef enum
   eTask_Buttons,  ///< Buttons
   eTask_LED,      ///< LED
   eTask_ClassB,   ///< ClassB
+  eTask_App,      ///< Main Application
   eTask_NUM       ///< Number of tasks. Must be last item
 } tTask;
 

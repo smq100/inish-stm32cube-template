@@ -171,7 +171,11 @@ bool LOG_Write(tLogger Logger, tLogLevel Level, const char* Module, bool Persist
   char output[MAX_DEBUGLOG_CHARS_TOT];
   bool success = false;
 
-  if (!IsPointerValid((uintptr_t)Module))
+  if (Level > _Level[Logger])
+  {
+    // Quickly bail if level is too low
+  }
+  else if (!IsPointerValid((uintptr_t)Module))
   {
     assert_always();
   }
@@ -214,7 +218,11 @@ bool LOG_WriteDirect(tLogger Logger, tLogLevel Level, const char* Module, bool P
   char output[MAX_DEBUGLOG_CHARS_TOT];
   bool success = false;
 
-  if (!IsPointerValid((uintptr_t)Module))
+  if (Level > _Level[Logger])
+  {
+    // Quickly bail if level is too low
+  }
+  else if (!IsPointerValid((uintptr_t)Module))
   {
     assert_always();
   }

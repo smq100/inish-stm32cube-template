@@ -83,6 +83,7 @@ static const fnClassBHandler_Runtime _Handler_ADC;
 static const fnClassBHandler_Runtime _Handler_CLK;
 static const fnClassBHandler_Runtime _Handler_WDG;
 static const fnClassBHandler_Runtime _Handler_Stack;
+static const fnClassBHandler_Runtime _Handler_App;
 static const fnClassBHandler_Runtime _Handler_Flow;
 
 static bool _DAQReadCallback(tDAQ_Entry Entry, uint8_t Item);
@@ -97,6 +98,7 @@ static const tConfig _Config[] = {
   { .Enabled = true, .Handler = _Handler_CLK  , .MaxErrors = 3u, .ErrorReset_Sec = 10u, .Name = "clk",   },
   { .Enabled = true, .Handler = _Handler_WDG  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "wdg",   },
   { .Enabled = true, .Handler = _Handler_Stack, .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "stack", },
+  { .Enabled = true, .Handler = _Handler_App  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "app",  },
   { .Enabled = true, .Handler = _Handler_Flow , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "flow",  },
 };
 // clang-format on
@@ -386,6 +388,18 @@ static tClassBRunStatus _Handler_WDG(bool enabled)
 static tClassBRunStatus _Handler_Stack(bool enabled)
 {
   return Runtime_STKTest(enabled);
+}
+
+/*******************************************************************/
+/*!
+ @brief     Handles the Application test
+ @param     None
+ @return    Status of the operation (eClassBRunStatus_PASS or eClassBRunStatus_FAIL)
+
+ *******************************************************************/
+static tClassBRunStatus _Handler_App(bool enabled)
+{
+  return Runtime_APPTest(enabled);
 }
 
 /*******************************************************************/
