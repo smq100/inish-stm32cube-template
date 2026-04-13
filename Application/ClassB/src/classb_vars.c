@@ -75,6 +75,7 @@ static const tClassBData_Config _Config[] = {
   { eDataType_S16, { .S16 = 0 }, false, "TEMP_PCB_S16" },
   { eDataType_S16, { .S16 = 0 }, false, "VREF_MV_S16" },
   { eDataType_S16, { .S16 = 0 }, false, "TRISE_X10_S16" },
+  { eDataType_Enum, { .Enum = 0u }, false, "TASK_ACTIVETASK_ENUM" },
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -164,6 +165,7 @@ tDataValue ClassB_GetVar(tClassBVars var)
       case eDataType_Bool:
       case eDataType_U8:
       case eDataType_S8:
+      case eDataType_Enum:
         if ((retVal.U8 ^ invVal.U8) != (uint8_t)0xFFu)
         {
           // Data corrupted
@@ -230,6 +232,7 @@ tClassB_SetResult ClassB_SetVar(tClassBVars var, tDataValue value)
       case eDataType_Bool:
       case eDataType_U8:
       case eDataType_S8:
+      case eDataType_Enum:
         ClassBDataInv[var].U8 = ~(value.U8);
         break;
 

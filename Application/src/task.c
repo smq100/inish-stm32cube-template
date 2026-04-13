@@ -127,6 +127,7 @@ when printed.
 #include "task_tech.h"
 #include "task_buttons.h"
 #include "task_led.h"
+#include "classb_vars.h"
 #include "timer.h"
 #include "power.h"
 #include "util.h"
@@ -221,6 +222,8 @@ bool TASK_Init(void)
   bool success = true;
 
   _ActiveTask = (tTask)0;
+  ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
+
   _ErrorField = 0;
   _ShutdownTimeout_ms = 0;
   _ShutdownInProcess = false;
@@ -305,6 +308,8 @@ bool TASK_Exec(void)
 
   while (process)
   {
+    _ActiveTask = (tTask)ClassB_GetVar(eClassBVar_TASK_ACTIVETASK_ENUM).Enum;
+
     if (!_Config[_ActiveTask].Enabled)
     {
       // Skip disabled tasks
@@ -364,9 +369,15 @@ bool TASK_Exec(void)
     }
 
     // Prepare for next task
-    if (++_ActiveTask >= _NumTasks)
+    if (_ActiveTask + 1 < _NumTasks)
+    {
+      _ActiveTask++;
+      ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
+    }
+    else
     {
       _ActiveTask = (tTask)0;
+      ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
 
       if (_IdleHookEnabled && !taskRan && !_ShutdownInProcess)
       {

@@ -235,7 +235,7 @@ static void RefreshWatchdogs(void)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  if (htim->Instance == TIM4)
+  if (htim->Instance == hTIM_SLEEP_IWDG_CNT.Instance)
   {
     if (_iwdg_init_done)
     {

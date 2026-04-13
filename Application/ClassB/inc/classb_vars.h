@@ -50,6 +50,7 @@ typedef enum
   eClassBVar_PCBTEMP_ADC_S16,           ///< last CPU temperature variable
   eClassBVar_VREF_ADC_S16,              ///< last CPU voltage-reference variable
   eClassBVar_LAST_ERROR_U32,            ///< last error code for Class B failures
+  eClassBVar_TASK_ACTIVETASK_ENUM,      ///< Active superloop task in scheduler
   eClassBVar_NUM,                       ///< number of items in the Class B data structure
 } tClassBVars;
 

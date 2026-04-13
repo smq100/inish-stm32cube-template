@@ -48,15 +48,11 @@
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef* htim)
 {
-  if (htim->Instance == TIM10)
+  if (htim->Instance == hTIM_CLKTEST.Instance)
   {
     // ClassB CLK timing
     ClassB__IC_Callback(htim);
   }
-}
-
-void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef* htim)
-{
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)

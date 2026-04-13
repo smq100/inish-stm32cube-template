@@ -867,7 +867,7 @@ bool ClassB__GetFault(tClassBRunItem Test)
 *******************************************************************/
 void ClassB__IC_Callback(TIM_HandleTypeDef* Htim)
 {
-  assert_param(Htim->Instance == TIM10);
+  assert_param(Htim->Instance == hTIM_CLKTEST.Instance);
 
   // Read/Write data directly to ClassB vars for ISR effiency
   extern tDataValue ClassBData[];

@@ -89,8 +89,8 @@ void POWER_Sleep(void)
 {
   // Use TIM10 counter which keeps running during sleep
 
-  // Get timestamp before sleep. Have to use hTIM_SLEEP_CNT because systicks are suspended
-  uint32_t sleep_tic = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_CNT);
+  // Get timestamp before sleep. Have to use hTIM_SLEEP_IWDG_CNT because systicks are suspended
+  uint32_t sleep_tic = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_IWDG_CNT);
 
   // Go to sleep; wait for a cross-over (other?) wake-up
   // Suspend Tick increment to prevent wakeup by Systick interrupt. Otherwise
@@ -102,8 +102,8 @@ void POWER_Sleep(void)
   HAL_ResumeTick();
   HAL_IWDG_Refresh(&hIWDG_APP);
 
-  // Convert sleep to milliseconds (hTIM_SLEEP_CNT freq is 4.0 MHz)
-  uint32_t sleep_toc = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_CNT);
+  // Convert sleep to milliseconds (hTIM_SLEEP_IWDG_CNT freq is 4.0 MHz)
+  uint32_t sleep_toc = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_IWDG_CNT);
   if (sleep_toc < sleep_tic)
   {
     // Handle rollover of 16-bit counter (rollover every 16.384ms at 4.0 MHz)
@@ -113,7 +113,7 @@ void POWER_Sleep(void)
 
   // Convert to milliseconds while preserving sub-ms contributions across calls.
   // This is important for POWER_Delay_us(), where each sleep is often <1ms.
-  const uint32_t ticks_per_ms = (TIM_SLEEP_COUNT_FREQ / 1000u);
+  const uint32_t ticks_per_ms = (TIM_SLEEP_IWDG_COUNT_FREQ / 1000u);
   uint32_t total_ticks = sleep + _SleepFracTicks;
 
   // Integer ms portion of sleep is added to total sleep time

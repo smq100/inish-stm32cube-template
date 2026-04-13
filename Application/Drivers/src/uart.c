@@ -68,6 +68,9 @@ typedef struct
 
 /* Public variables ----------------------------------------------------------*/
 
+// Timeout for UART transmit
+static const uint32_t _Timeout_ms = 500;
+
 /* Private variables ---------------------------------------------------------*/
 
 //! UART configuration
@@ -361,4 +364,20 @@ static tSerialPort _HandleToPort(const UART_HandleTypeDef* Handle)
   }
 
   return port;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Writes a character to UART for debugging
+            Overrides the weak __io_putchar function used by printf
+ @param     ch: character to write
+ @return    The character written
+*******************************************************************/
+int __io_putchar(int ch)
+{
+  uint8_t c = (uint8_t)ch;
+
+  HAL_UART_Transmit(&BOOT_UART_HANDLE, &c, 1u, _Timeout_ms);
+
+  return ch;
 }

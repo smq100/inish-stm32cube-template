@@ -58,6 +58,7 @@ typedef enum DataType
   eDataType_S16,
   eDataType_U8,
   eDataType_S8,
+  eDataType_Enum,
 } tDataType;
 
 //! Union of data values that are used throughout the application where data of differing types
@@ -74,6 +75,7 @@ typedef union DataValue
   int16_t S16;            //!< Signed int
   uint8_t U8;             //!< Unsigned int
   int8_t S8;              //!< Signed int
+  uint8_t Enum;           //!< Enum value stored as uint32
 } tDataValue;
 
 typedef struct

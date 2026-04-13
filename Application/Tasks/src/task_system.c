@@ -73,8 +73,8 @@ extern uint32_t _rom_end;    ///< One-past-end of ROM. Defined in the linker scr
 
 /* Private variables ---------------------------------------------------------*/
 
-static const char* _Module = "T_SYS";                                  ///< Module name to be used for debug logging
-static const uint32_t _ProcessingPeriod_ms[3] = { 100, 1000, 10000 };  ///< System processing periods in milliseconds
+static const char* _Module = "T_SYS";                                     ///< Module name to be used for debug logging
+static const uint32_t _ProcessingPeriod_ms[3] = { 100u, 1000u, 10000u };  ///< System processing periods in milliseconds
 static const char* _StatusLEDStateNames[eStatusLED_NUM] = { "Init", "Normal", "Error" };
 
 static uint32_t _BootCycles = 0;                           ///< Number of boot cycles since EEPROM was erased
@@ -84,7 +84,7 @@ static uint32_t _RAM_kb;
 static uint32_t _ROM_kb;
 
 static tSystemState _State = eSystemState_Init1;  //!< System state
-static float _CoreClkFreq = 0.0;                  //!< Core clock freq in Hz
+static float _CoreClkFreq = 0.0f;                 //!< Core clock freq in Hz
 static uint32_t _HardwareRev = 0;                 //!< Detected HW revision
 
 static_assert(sizeof(_StatusLEDStateNames) / sizeof(_StatusLEDStateNames[0]) == eStatusLED_NUM, "LED state names");

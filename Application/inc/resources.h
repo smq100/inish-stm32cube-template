@@ -56,9 +56,9 @@
 #define TIM_ZC_RISEEDGE_CH TIM_CHANNEL_2
 
 // Timer: Timer responsible for sleep counting and IWDG refresh
-#define hTIM_SLEEP_CNT htim4
-#define TIM_SLEEP_CNT_CH TIM_CHANNEL_1
-#define TIM_SLEEP_COUNT_FREQ 4000000u  ///< 4.0 MHz
+#define hTIM_SLEEP_IWDG_CNT htim4
+#define TIM_SLEEP_IWDG_CNT_CH TIM_CHANNEL_1
+#define TIM_SLEEP_IWDG_COUNT_FREQ 4000000u  ///< 4.0 MHz
 
 // Timer: Timer responsible for clock testing
 #define hTIM_CLKTEST htim10
@@ -82,6 +82,7 @@
 
 // ADC
 #define hADC_APP hadc
+#define ADC_INST ADC1
 
 // CRC
 #define hCRC_APP hcrc
@@ -97,4 +98,4 @@
 
 #endif /* MAP_PROTECTED */
 
-#endif /* __MAP_H */
+#endif
