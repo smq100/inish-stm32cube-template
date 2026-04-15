@@ -68,7 +68,7 @@ static const char* _Module = "T_SER";           //!< Module name for debug loggi
 static uint32_t const _PacketMax = PACKET_MAX;  //!< Max size to UART packet
 static uint32_t const _Timeout_ms = 100;        //!< Timeout in ms
 
-#ifdef TEST__ENABLE_LOGGING
+#ifndef TEST__DISABLE_LOGGING
 static const tLogLevel _LoggingLevel = LOGGING_DEFAULT_LEVEL;  //!< Default debug serial logging level
 #else
 static const tLogLevel _LoggingLevel = eLogLevel_None;  //!< Default debug

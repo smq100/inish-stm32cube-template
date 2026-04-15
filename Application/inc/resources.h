@@ -35,13 +35,17 @@
 #define __MAP_H
 
 #include "tim.h"
-#include "iwdg.h"
 #include "usart.h"
 #include "adc.h"
 #include "crc.h"
 #include "rtc.h"
 
 #include "main.h"
+#include "test.h"
+
+#ifndef TEST__DISABLE_IWDG
+#include "iwdg.h"
+#endif
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
@@ -70,7 +74,9 @@
 #define TIM_SLEEP_CH TIM_CHANNEL_1
 
 // Independent watchdog
+#ifndef TEST__DISABLE_IWDG
 #define hIWDG_APP hiwdg
+#endif
 
 // USARTs
 #define hUART_TECH huart2           // UART used for technical messages

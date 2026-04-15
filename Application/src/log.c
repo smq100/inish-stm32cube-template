@@ -43,7 +43,7 @@
 #include "uart.h"
 #include "util.h"
 
-#ifdef TEST__ENABLE_LOGGING
+#ifndef TEST__DISABLE_LOGGING
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -638,4 +638,4 @@ bool LOG_Progress(tLogger Logger, tLogLevel Level, const char* Module, char Dot)
   return true;
 }
 
-#endif /* TEST__ENABLE_LOGGING */
+#endif /* TEST__DISABLE_LOGGING */

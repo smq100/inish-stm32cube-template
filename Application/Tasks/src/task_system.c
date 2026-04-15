@@ -110,8 +110,6 @@ static bool _DAQReadCallback(tDAQ_Entry Entry, uint8_t Item);
 *******************************************************************/
 bool SYSTEM_Init(void)
 {
-  UNUSED(_Module);
-
   _State = _Init1() ? eSystemState_Init2 : eSystemState_Error;
 
   return _State == eSystemState_Init2;

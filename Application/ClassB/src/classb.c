@@ -84,7 +84,7 @@ static const tClassbStartConfig _StartConfig[] = {
   { true, true,  false, Start_RAMTest,   "sRAM" },
   { true, true,  false, Start_CPUTest,   "sCPU" },
 
-#ifndef TEST__ENABLE_DEBUG
+#ifndef TEST__DISABLE_IWDG
   { true, false, false, Start_IWDGTest,  "sIWDG" },
 #else
   { false, false, false, Start_IWDGTest, "sIWDG" },
@@ -104,12 +104,11 @@ static const tClassbRunConfig _RunConfig[] = {
   { true, "rRAM" },
   { true, "rCRC" },
   { true, "rADC" },
-
-#ifndef TEST__ENABLE_DEBUG
   { true, "rCLK" },
+
+#ifndef TEST__DISABLE_IWDG
   { true, "rWDG" },
 #else
-  { false, "rCLK" },
   { false, "rWDG" },
 #endif
 
@@ -394,7 +393,9 @@ void ClassB_Fail_Startup(tClassBStartItem Test)
 
   while (true)
   {
+#ifndef TEST__DISABLE_IWDG
     HAL_IWDG_Refresh(&hIWDG_APP);
+#endif
 
     HAL_GPIO_TogglePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin);
     HAL_Delay(100);

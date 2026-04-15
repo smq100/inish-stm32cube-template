@@ -42,6 +42,7 @@
 #include <string.h>
 
 #include "resources.h"
+#include "test.h"
 
 /* Exported types ------------------------------------------------------------*/
 
@@ -110,15 +111,6 @@ typedef enum
 
 #define CRITICAL_SECTION_START() __disable_irq()
 #define CRITICAL_SECTION_END() __enable_irq()
-
-//! *** Define special testing modes (should all be undefined for production builds)
-// Enable logging via LOG module
-#define TEST__ENABLE_LOGGING
-
-// Enable debugger mode, which disabled all watchdogs and classb CLK runtime tests
-// This is needed if debugging via the IDE, which typically halts the CPU without resetting,
-// which would cause watchdogs to trigger and interfere with debugging
-// #define TEST__ENABLE_DEBUG
 
 #define NULLPTR ((void*)0)
 
