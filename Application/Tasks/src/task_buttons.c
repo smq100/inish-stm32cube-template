@@ -174,9 +174,14 @@ bool BUTTON_Init(void)
     }
 
     // Register callbacks with timer
-    TIMER_RegisterCallback(&_TimerCallback);
-
-    _Initialized = true;
+    if (TIMER_RegisterCallback(&_TimerCallback))
+    {
+      _Initialized = true;
+    }
+    else
+    {
+      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Timer callback registration failed");
+    }
   }
 
   if (_Initialized)
@@ -331,10 +336,16 @@ uint32_t BUTTON_GetChord(void)
  *******************************************************************/
 bool BUTTON_IsPressedRaw(tButtonID Button)
 {
-  GPIO_PinState polarity = _Config[Button].ActiveHigh ? GPIO_PIN_SET : GPIO_PIN_RESET;
-  GPIO_PinState state = HAL_GPIO_ReadPin(_Config[Button].GPIO.Port, _Config[Button].GPIO.Pin);
+  bool pressed = false;
 
-  return (state == polarity);
+  if (Button < eButtonID_NUM)
+  {
+    GPIO_PinState polarity = _Config[Button].ActiveHigh ? GPIO_PIN_SET : GPIO_PIN_RESET;
+    GPIO_PinState state = HAL_GPIO_ReadPin(_Config[Button].GPIO.Port, _Config[Button].GPIO.Pin);
+    pressed = (state == polarity);
+  }
+
+  return pressed;
 }
 
 /*******************************************************************/
@@ -520,7 +531,7 @@ static void _ProcessState(void)
     }
 
     // Check for stuck status when first starting
-    if (SYSTEM_GetUpTime_MS() < _StuckTime_ms)
+    if (SYSTEM_GetUpTime_MS() <= (_StuckTime_ms + 1000u))
     {
       _IsStuck();
     }
@@ -642,6 +653,10 @@ static bool _IsStuck(void)
         if (prevState[i])
         {
           count[i]++;
+        }
+        else
+        {
+          count[i] = 1;
         }
       }
       else

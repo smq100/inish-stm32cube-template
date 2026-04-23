@@ -47,7 +47,6 @@
 //! Command handler
 typedef struct
 {
-  bool Enabled;                      ///< Indicates whether the test is enabled
   fnClassBHandler_Runtime* Handler;  ///< Command handler
   uint32_t MaxErrors;                ///< Max errors before test is marked failed
   uint32_t ErrorReset_Sec;           ///< Time in seconds to reset error count after a failure
@@ -91,15 +90,15 @@ static bool _DAQReadCallback(tDAQ_Entry Entry, uint8_t Item);
 // clang-format off
 //! Tech commands and associated handlers (must be same order as tClassBRunItem enum)
 static const tConfig _Config[] = {
-  { .Enabled = true, .Handler = _Handler_CPU  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "cpu",   },
-  { .Enabled = true, .Handler = _Handler_RAM  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "ram",   },
-  { .Enabled = true, .Handler = _Handler_CRC  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "crc",   },
-  { .Enabled = true, .Handler = _Handler_ADC  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "adc",   },
-  { .Enabled = true, .Handler = _Handler_CLK  , .MaxErrors = 3u, .ErrorReset_Sec = 10u, .Name = "clk",   },
-  { .Enabled = true, .Handler = _Handler_WDG  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "wdg",   },
-  { .Enabled = true, .Handler = _Handler_Stack, .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "stack", },
-  { .Enabled = true, .Handler = _Handler_App  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "app",  },
-  { .Enabled = true, .Handler = _Handler_Flow , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "flow",  },
+  { .Handler = _Handler_CPU  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "cpu",   },
+  { .Handler = _Handler_RAM  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "ram",   },
+  { .Handler = _Handler_CRC  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "crc",   },
+  { .Handler = _Handler_ADC  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "adc",   },
+  { .Handler = _Handler_CLK  , .MaxErrors = 3u, .ErrorReset_Sec = 10u, .Name = "clk",   },
+  { .Handler = _Handler_WDG  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "wdg",   },
+  { .Handler = _Handler_Stack, .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "stack", },
+  { .Handler = _Handler_App  , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "app",  },
+  { .Handler = _Handler_Flow , .MaxErrors = 1u, .ErrorReset_Sec = 10u, .Name = "flow",  },
 };
 // clang-format on
 
@@ -118,11 +117,11 @@ static_assert(sizeof(_Config) / sizeof(tConfig) == eClassBRunItem_NUM, "tConfig 
 bool CLASSB_Init(void)
 {
   // Let's get started
-  _Runtime.Initialized = Runtime_Init();
 
-  if (_Runtime.Initialized)
+  if (!_Runtime.Initialized)
   {
     ClassB_VarsInit();
+    _Runtime.Initialized = Runtime_Init();
 
     _Runtime.Item = (tClassBRunItem)0;
 

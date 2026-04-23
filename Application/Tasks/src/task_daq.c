@@ -34,11 +34,10 @@
 
 #include "main.h"
 #include "task_daq.h"
-
+#include "task_system.h"
 #include "classb.h"
 #include "log.h"
 #include "timer.h"
-#include "task_system.h"
 #include "util.h"
 
 /* Private typedef -----------------------------------------------------------*/
@@ -313,6 +312,11 @@ bool DAQ_RegisterItem(tDAQ_Entry Entry, tDAQ_Config* Config, bool All)
     // Should never be here
     assert_always();
   }
+  else if (All && ((Config->Items == 0u) || (Config->Items > _MaxItems)))
+  {
+    // Invalid item count
+    assert_always();
+  }
   else if (All)
   {
     _Config[Entry] = *Config;
@@ -406,7 +410,7 @@ bool DAQ_UpdateItem(tDAQ_Entry Entry, uint8_t Item, tDataValue Value)
   {
     // Invalid entry
   }
-  else if (Item >= _MaxItems)
+  else if (Item >= _Config[Entry].Items)
   {
     // Invalid item
   }
@@ -436,7 +440,7 @@ bool DAQ_WriteItem(tDAQ_Entry Entry, uint8_t Item, tDataValue Value)
   {
     // Invalid entry
   }
-  else if (Item >= _MaxItems)
+  else if (Item >= _Config[Entry].Items)
   {
     // Invalid item
   }

@@ -104,8 +104,6 @@ typedef bool(fnTaskTest)(void);
 
 fnTaskInit TASK_Init;
 fnTaskExec TASK_Exec;
-fnTaskShutdown TASK_Shutdown;
-fnTaskTest TASK_Test;
 
 bool TASK_IsInitialized(tTask Task);
 bool TASK_AreAllInitialized(void);
@@ -114,7 +112,7 @@ void TASK_SetDelay(tTask Task, uint32_t Delay);
 bool TASK_GetStatus(tTask Task, tLoopMetrics* Loop, tTaskMetrics* Metrics);
 bool TASK_GetLoad(tTaskLoad* Load);
 const char* TASK_GetName(tTask Task);
-void TASK_PrintStatus(tTask Task, bool Summary);
+uint32_t TASK_PrintStatus(tTask Task, bool Summary, char* Buf, uint32_t BufSize);
 uint32_t TASK_GetErrorField(void);
 void TASK_ResetDefaults(void);
 

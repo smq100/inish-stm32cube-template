@@ -62,6 +62,9 @@ typedef enum
 } tClassB_SetResult;
 
 /* Exported constants --------------------------------------------------------*/
+
+#define CLASSB_NAN -29998  ///< define a fake not-a-number used for invalid variable values
+
 /* Exported macros ------------------------------------------------------------*/
 /* Exported vars ------------------------------------------------------------ */
 /* Exported functions ------------------------------------------------------- */

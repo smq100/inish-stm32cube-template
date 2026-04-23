@@ -95,6 +95,51 @@ static_assert(sizeof(ClassBDataInv) / sizeof(tDataValue) == eClassBVar_NUM, "inv
  *******************************************************************/
 bool ClassB_VarsInit(void)
 {
+  // Initialize Class B variables to their default values and their inverses for integrity check
+  for (uint32_t i = 0; i < eClassBVar_NUM; i++)
+  {
+    // Set initial value
+    ClassBData[i] = _Config[i].Init;
+
+    // Set inverse value for integrity check
+    switch (_Config[i].Type)
+    {
+      case eDataType_Float:
+        ClassBDataInv[i].U32 = ~(*(uint32_t*)&_Config[i].Init.Float);
+        break;
+
+      case eDataType_U32:
+      case eDataType_S32:
+        ClassBDataInv[i].U32 = ~(_Config[i].Init.U32);
+        break;
+
+      case eDataType_V32:
+        // Write (close to) atomically for volatiles
+        CRITICAL_SECTION_START();
+        ClassBData[i] = _Config[i].Init;
+        ClassBDataInv[i].V32 = ~(_Config[i].Init.V32);
+        CRITICAL_SECTION_END();
+        break;
+
+      case eDataType_U16:
+      case eDataType_S16:
+        ClassBDataInv[i].U16 = ~(_Config[i].Init.U16);
+        break;
+
+      case eDataType_Bool:
+      case eDataType_U8:
+      case eDataType_S8:
+      case eDataType_Enum:
+        ClassBDataInv[i].U8 = ~(_Config[i].Init.U8);
+        break;
+
+      default:
+        // Unsupported type
+        assert_always();
+        return false;
+    }
+  }
+
   return true;
 }
 
@@ -106,8 +151,8 @@ bool ClassB_VarsInit(void)
   *******************************************************************/
 tDataValue ClassB_GetVar(tClassBVars var)
 {
-  tDataValue retVal = { 0 };
-  tDataValue invVal = { 0 };
+  tDataValue retVal = { .S32 = CLASSB_NAN };
+  tDataValue invVal = { .S32 = CLASSB_NAN };
 
   if (var < eClassBVar_NUM)
   {
@@ -158,7 +203,7 @@ tDataValue ClassB_GetVar(tClassBVars var)
         {
           // Data corrupted
           _Vars_Fail(var);
-          retVal.S16 = 0u;
+          retVal.U16 = 0u;
         }
         break;
 
@@ -181,6 +226,11 @@ tDataValue ClassB_GetVar(tClassBVars var)
         break;
     }
   }
+  else
+  {
+    // Invalid variable requested
+    assert_always();
+  }
 
   return retVal;
 }
@@ -200,7 +250,7 @@ tClassB_SetResult ClassB_SetVar(tClassBVars var, tDataValue value)
   {
     if (ClassBData[var].U32 != value.U32)
     {
-      // Use U32 for comparison to becasue it is the largest type and all types are stored in a tDataValue union
+      // Use U32 for comparison because it is the largest type and all types are stored in a tDataValue union
       result = eClassBSet_Changed;
     }
 

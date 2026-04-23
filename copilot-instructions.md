@@ -18,6 +18,7 @@
 - Minimize stack usage in interrupt context.
 - Use `static` for file-local helpers and variables, and `const` where possible.
 - Avoid floating-point variables and math in time-critical paths unless required and a MCU FPU is available.
+- Prefer no early returns in functions with complex cleanup logic, but use them judiciously to avoid deep nesting.
 
 ## Safety and embedded constraints
 - Assume code may run in ISRs and cooperative task loops.

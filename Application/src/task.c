@@ -163,11 +163,10 @@ typedef struct
 /* Public variables ----------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
-static const char* _Module = "TASK";               //!< Module name used for debug logging
-static const uint8_t _NumTasks = eTask_NUM;        //!< Number of tasks
-static const bool _MetricsEnabled = true;          //!< True to collect task metrics
-static const bool _IdleHookEnabled = true;         //!< True to enable scheduler idle hook sleep path
-static const uint32_t _PrintDebugInterval_ms = 0;  //!< Print debug interval in ms (0=disabled)
+static const char* _Module = "TASK";         //!< Module name used for debug logging
+static const uint8_t _NumTasks = eTask_NUM;  //!< Number of tasks
+static const bool _MetricsEnabled = true;    //!< True to collect task metrics
+static const bool _IdleHookEnabled = true;   //!< True to enable scheduler idle hook sleep path
 
 // Delays were chosen, if possible, to distribute servicing of tasks so that tasks are
 // not all serviced on the same loop iteration by using prime numbers. Some Primes:
@@ -205,6 +204,7 @@ static void _ProcessIdleMetrics(bool Begin);
 static uint32_t _GetTimeUntilNextTask_ms(void);
 static void _IdleHook(void);
 static void _ProcessShutdown(void);
+static bool _Test(void);
 
 /* Public Implementation -----------------------------------------------------*/
 
@@ -220,6 +220,9 @@ bool TASK_Init(void)
 {
   tTask task;
   bool success = true;
+
+  // System task must always be enabled
+  assert(_Defaults[eTask_System].Enabled);
 
   _ActiveTask = (tTask)0;
   ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
@@ -276,7 +279,7 @@ bool TASK_Init(void)
   }
 
   // Tasks initialized. Now test
-  TASK_Test();
+  _Test();
 
   success = (_ErrorField == 0);
 
@@ -302,13 +305,22 @@ bool TASK_Init(void)
 *******************************************************************/
 bool TASK_Exec(void)
 {
-  static bool process = true;
-  static uint32_t timestamp = 0;
   static bool taskRan = false;
 
-  while (process)
+  while (true)
   {
     _ActiveTask = (tTask)ClassB_GetVar(eClassBVar_TASK_ACTIVETASK_ENUM).Enum;
+
+    if (_ActiveTask >= _NumTasks)
+    {
+      // Reset to first task if out of bounds
+      _ActiveTask = (tTask)0;
+      ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
+
+      // Active task should never be out of bounds, so assert if it is. Reset to first task to recover.
+      LOG_Write(eLogger_Sys, eLogLevel_Error, _Module, true, "Active task out of bounds. Resetting to first task.");
+      assert_always();
+    }
 
     if (!_Config[_ActiveTask].Enabled)
     {
@@ -358,8 +370,20 @@ bool TASK_Exec(void)
         }
 
         // Execute the task's main exec function
-        process = _Config[_ActiveTask].Exec();
-        taskRan = true;
+        if (_Config[_ActiveTask].Exec())
+        {
+          taskRan = true;
+        }
+        else
+        {
+          // Exec function should never return false. If it does, log an error and continue.
+          LOG_Write(eLogger_Sys,
+                    eLogLevel_Error,
+                    _Module,
+                    true,
+                    "Task '%s' exec function returned false.",
+                    _Config[_ActiveTask].Name);
+        }
 
         if (_MetricsEnabled)
         {
@@ -393,56 +417,11 @@ bool TASK_Exec(void)
       taskRan = false;
     }
 
-    // Print task metrics for task tuning if desired
-    if (!_MetricsEnabled)
-    {
-      // Nothing to print if metrics are disabled
-    }
-    else if (_PrintDebugInterval_ms > 0)
-    {
-      if (TIMER_GetElapsed_ms(timestamp) > _PrintDebugInterval_ms)
-      {
-        for (tTask task = (tTask)0; task < _NumTasks; task++)
-        {
-          TASK_PrintStatus(task, false);
-        }
-
-        timestamp = TIMER_GetTick();
-      }
-    }
-
     _ProcessShutdown();
   }
 
   // Should never return
   return false;
-}
-
-/*******************************************************************/
-/*!
- @brief     Shutdown processing
- @return    True if ok for the system to powerdown
-
- This functions takes the form of the TASK executive prototype, fnTaskShutdown (see task.c/h)
-
- *******************************************************************/
-bool TASK_Shutdown(void)
-{
-  // Perform shutdown for all enabled tasks
-  for (int task = 0; task < _NumTasks; task++)
-  {
-    if (_Config[task].Enabled)
-    {
-      // Call each task's Shutdown function
-      _Runtime[task].Shutdown = _Config[task].Shutdown();
-    }
-    else
-    {
-      _Runtime[task].Shutdown = true;
-    }
-  }
-
-  return true;
 }
 
 /*******************************************************************/
@@ -683,54 +662,67 @@ const char* TASK_GetName(tTask Task)
 
 /*******************************************************************/
 /*!
- @brief     Prints the status of a tasks
- @param     Task: The desired task, or -1 for overall loop and scheduler status
+ @brief      Prints the status of a tasks in the form of a JSON string
+ @param      Task: The desired task, or -1 for overall loop and scheduler status
+ @param      Summary: True to print summary of overall loop and scheduler status, false to print individual task status
+ @param      Buf: Buffer to store the status string
+ @param      BufSize: Size of the buffer
  *******************************************************************/
-void TASK_PrintStatus(tTask Task, bool Summary)
+uint32_t TASK_PrintStatus(tTask Task, bool Summary, char* Buf, uint32_t BufSize)
 {
-  if (Summary)
+  // If a caller is not the tech task, buffer size may need to be adjusted
+  char output[TECH_RESPONSE_MAXSIZE];
+  uint32_t size = 0;
+
+  if (BufSize > TECH_RESPONSE_MAXSIZE)
+  {
+    assert_always();
+  }
+  else if (!IsRAM(((uintptr_t)Buf) + BufSize - 1))
+  {
+    assert_always();
+  }
+  else if (Summary)
   {
     tTaskLoad load = { 0 };
-
     TASK_GetLoad(&load);
 
-    LOG_Write(eLogger_Sys,
-              eLogLevel_Always,
-              _Module,
-              false,
-              "Summary: loops=%lu%08lu, tot=%.01fs, min=%lu, max=%lu, avg=%lu",
-              (uint32_t)(_LoopMetrics.Loops >> 32),
-              (uint32_t)(_LoopMetrics.Loops & 0xFFFFFFFF),
-              _LoopMetrics.TimeTotal_s,
-              _LoopMetrics.TimeMin_ms,
-              _LoopMetrics.TimeMax_ms,
-              _LoopMetrics.TimeAvg_ms);
-
-    LOG_Write(eLogger_Sys,
-              eLogLevel_Always,
-              _Module,
-              false,
-              "Idle: busy=%.1f%%, idle=%.1f%%, ovh=%.1f%%",
-              load.Busy_pct,
-              load.Idle_pct,
-              load.Overhead_pct);
+    size = snprintf(output,
+                    BufSize,
+                    "summary:{\"loops\":%lu%lu, \"tot\":%.01fs, \"min\":%lu, \"max\":%lu,"
+                    "\"avg\":%lu},\"load\":{\"busy\":%.1f, \"idle\":%.1f, \"oh\":%.1f}",
+                    (uint32_t)(_LoopMetrics.Loops >> 32),
+                    (uint32_t)(_LoopMetrics.Loops & 0xFFFFFFFF),
+                    _LoopMetrics.TimeTotal_s,
+                    _LoopMetrics.TimeMin_ms,
+                    _LoopMetrics.TimeMax_ms,
+                    _LoopMetrics.TimeAvg_ms,
+                    load.Busy_pct,
+                    load.Idle_pct,
+                    load.Overhead_pct);
   }
   else if (Task < _NumTasks)
   {
-    LOG_Write(eLogger_Sys,
-              eLogLevel_Always,
-              _Module,
-              false,
-              "%4s: d=%3lu, s=%lu%08lu, tot=%.01fs, min=%lu, max=%lu, avg=%lu",
-              _Runtime[Task].Metrics.Name,
-              _Runtime[Task].Metrics.Delay_ms,
-              (uint32_t)(_Runtime[Task].Metrics.Switches >> 32),
-              (uint32_t)(_Runtime[Task].Metrics.Switches & 0xFFFFFFFF),
-              _Runtime[Task].Metrics.TimeTotal_s,
-              _Runtime[Task].Metrics.TimeMin_ms,
-              _Runtime[Task].Metrics.TimeMax_ms,
-              _Runtime[Task].Metrics.TimeAvg_ms);
+    size = snprintf(
+      output,
+      BufSize,
+      "task:{\"name\":\"%s\", \"delay\":%lu, \"sw\":%lu%lu, \"tot\":%.01fs, \"min\":%lu, \"max\":%lu,\"avg\":%lu}",
+      _Runtime[Task].Metrics.Name,
+      _Runtime[Task].Metrics.Delay_ms,
+      (uint32_t)(_Runtime[Task].Metrics.Switches >> 32),
+      (uint32_t)(_Runtime[Task].Metrics.Switches & 0xFFFFFFFF),
+      _Runtime[Task].Metrics.TimeTotal_s,
+      _Runtime[Task].Metrics.TimeMin_ms,
+      _Runtime[Task].Metrics.TimeMax_ms,
+      _Runtime[Task].Metrics.TimeAvg_ms);
   }
+
+  if (size > 0)
+  {
+    strncpy(Buf, output, BufSize - 1);
+  }
+
+  return size;
 }
 
 /*******************************************************************/
@@ -772,25 +764,35 @@ void TASK__BeginShutdown(uint16_t Time_ms)
 static void _ProcessLoopMetrics(void)
 {
   static uint32_t timestamp = 0;
+  static bool initialized = false;
   uint32_t time;
 
-  time = TIMER_GetElapsed_ms(timestamp);
-
-  _LoopMetrics.Loops++;
-  _LoopMetrics.TimeTotal_s += (time / 1000.0f);
-
-  if (time < _LoopMetrics.TimeMin_ms)
+  // Prime the baseline on first call so startup time does not skew loop metrics.
+  if (!initialized)
   {
-    _LoopMetrics.TimeMin_ms = time;
+    timestamp = TIMER_GetTick();
+    initialized = true;
   }
-  else if (time > _LoopMetrics.TimeMax_ms)
+  else
   {
-    _LoopMetrics.TimeMax_ms = time;
+    time = TIMER_GetElapsed_ms(timestamp);
+
+    _LoopMetrics.Loops++;
+    _LoopMetrics.TimeTotal_s += (time / 1000.0f);
+
+    if (time < _LoopMetrics.TimeMin_ms)
+    {
+      _LoopMetrics.TimeMin_ms = time;
+    }
+    else if (time > _LoopMetrics.TimeMax_ms)
+    {
+      _LoopMetrics.TimeMax_ms = time;
+    }
+
+    _LoopMetrics.TimeAvg_ms = _LoopMetrics.TimeTotal_s / _LoopMetrics.Loops * 1000.0f;
+
+    timestamp = TIMER_GetTick();
   }
-
-  _LoopMetrics.TimeAvg_ms = _LoopMetrics.TimeTotal_s / _LoopMetrics.Loops * 1000.0f;
-
-  timestamp = TIMER_GetTick();
 }
 
 /*******************************************************************/
@@ -918,4 +920,45 @@ static void _ProcessShutdown(void)
       _ShutdownInProcess = true;
     }
   }
+}
+
+/*******************************************************************/
+/*!
+ @brief     Main TASK POST testing routine
+ @return    True if successful, otherwise false
+
+ This functions takes the form of the TASK test prototype, fnTaskExec (see task.c/h)
+
+ *******************************************************************/
+static bool _Test(void)
+{
+  static tTask task = (tTask)0;
+
+  // Perform POST for all enabled tasks
+  for (task = (tTask)0; task < _NumTasks; task++)
+  {
+    if (_Config[task].Enabled)
+    {
+      // Some devices need some time to stabilize before we should test them
+      while (SYSTEM_GetUpTime_MS() < _Config[task].TestDelay)
+      {
+      }
+
+      if (_Config[task].Test())
+      {
+        // Passed testing
+        _Runtime[task].Initialized = true;
+      }
+      else
+      {
+        // Disable the task
+        _Config[task].Enabled = false;
+
+        // Set the error bit
+        _ErrorField |= (1 << task);
+      }
+    }
+  }
+
+  return (_ErrorField == 0);
 }

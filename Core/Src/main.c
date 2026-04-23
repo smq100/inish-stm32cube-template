@@ -211,7 +211,7 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 static void RefreshWatchdogs(void)
 {
-  static const uint32_t refresh_interval_ms = 50;
+  static const uint32_t refresh_interval_ms = 25;
   static uint32_t refresh_tick = 0;
 
   if (!_iwdg_init_done)

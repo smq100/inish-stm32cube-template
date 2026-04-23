@@ -55,15 +55,15 @@ fnTaskTest SERIAL_Test;
 
 void SERIAL_SetEnabled(tSerialPort Port, bool Enable);
 bool SERIAL_IsEnabled(tSerialPort Port);
-int32_t SERIAL_SendPacket(tSerialPort Port, const uint8_t* Packet, uint8_t Size);
-int32_t SERIAL_SendByte(tSerialPort Port, uint8_t C);
+uint32_t SERIAL_SendPacket(tSerialPort Port, const uint8_t* Packet, uint16_t Size);
+uint32_t SERIAL_SendByte(tSerialPort Port, uint8_t C);
 bool SERIAL_SendString(tSerialPort Port, char const* Str);
-int32_t SERIAL_ReceiveByte(tSerialPort Port, uint8_t* C);
-int32_t SERIAL_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint8_t Size);
-int16_t SERIAL_GetRxCount(tSerialPort Port);
-int16_t SERIAL_GetTxCount(tSerialPort Port);
-int32_t SERIAL_GetRxOverflowCount(tSerialPort Port);
-int32_t SERIAL_GetTxOverflowCount(tSerialPort Port);
+uint32_t SERIAL_ReceiveByte(tSerialPort Port, uint8_t* C);
+uint32_t SERIAL_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint16_t Size);
+uint16_t SERIAL_GetRxCount(tSerialPort Port);
+uint16_t SERIAL_GetTxCount(tSerialPort Port);
+uint32_t SERIAL_GetRxOverflowCount(tSerialPort Port);
+uint32_t SERIAL_GetTxOverflowCount(tSerialPort Port);
 bool SERIAL_FlushRx(tSerialPort Port);
 bool SERIAL_FlushTx(tSerialPort Port);
 

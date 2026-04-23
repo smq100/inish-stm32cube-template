@@ -278,10 +278,10 @@ tClassBRunStatus Runtime_CRCTest(bool Enabled)
               eLogLevel_Low,
               _Module,
               false,
-              "CRC block 0x%08lX (%lu words, %lu remaining)",
+              "CRC block 0x%08lX (%lu remaining, end=0x%08lX)",
               (uint32_t)pRunCrc32Chk,
-              words_to_check,
-              remaining_words);
+              remaining_words,
+              (uint32_t*)ROM_END);
 
     // Process one block of ROM
     for (uint32_t index = 0; index < words_to_check; index++)

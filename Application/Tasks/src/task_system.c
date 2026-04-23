@@ -256,12 +256,18 @@ void SYSTEM_FactoryReset(void)
   LOG_Reset(eLogger_Tech, false);
 
   // Reset the regs only (don't reset the entire EEPROM)
-  EEPROM_MCU_Erase(true);
+  if (!EEPROM_MCU_Erase(true))
+  {
+    LOG_WriteDirect(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to erase MCU EEPROM");
+  }
 
   // Reset the external EEPROM (where logs are stored) to all 0xFF to indicate empty
-  EEPROM_EXT_Erase();
+  if (!EEPROM_EXT_Erase())
+  {
+    LOG_WriteDirect(eLogger_Sys, eLogLevel_Error, _Module, true, "Failed to erase external EEPROM");
+  }
 
-  SYSTEM__BeginShutdown(1500);
+  SYSTEM__BeginShutdown(0);
 }
 
 /*******************************************************************/

@@ -34,7 +34,6 @@
 #include "main.h"
 #include "task_serial.h"
 #include "uart.h"
-#include "usart.h"
 #include "queue.h"
 #include "timer.h"
 #include "log.h"
@@ -168,8 +167,13 @@ bool SERIAL_Init(void)
     }
     else
     {
-      QUEUE_Flush(_Queue[port].TxQueue);
-      QUEUE_Flush(_Queue[port].RxQueue);
+      success = false;
+      LOG_Write(eLogger_Sys,
+                eLogLevel_Warning,
+                _Module,
+                false,
+                "Attempting to initialize '%s' serial port that is already initialized",
+                (port == eSerial_Debug) ? "Debug" : "Tech");
     }
   }
 
@@ -179,6 +183,7 @@ bool SERIAL_Init(void)
     if (!LOG_Init(eLogger_Sys, eSerial_Debug, _LoggingLevel, true))
     {
       _Initialized[eSerial_Debug] = false;
+      _Enabled[eSerial_Debug] = false;
     }
   }
   else
@@ -192,6 +197,7 @@ bool SERIAL_Init(void)
     if (!LOG_Init(eLogger_Tech, eSerial_Tech, _LoggingLevel, true))
     {
       _Initialized[eSerial_Tech] = false;
+      _Enabled[eSerial_Tech] = false;
     }
   }
   else
@@ -213,23 +219,27 @@ bool SERIAL_Exec(void)
 {
   tSerialPort port;
   uint32_t count;
-  static uint32_t txBusySinceMs = 0;
+  static uint32_t txBusySinceMs[NUM_SERIAL_PORTS] = { 0 };
 
   // Process Tx
   for (port = (tSerialPort)0; port < NUM_SERIAL_PORTS; port++)
   {
-    if (QUEUE_GetCount(_Queue[port].TxQueue) == 0)
+    if (!_Initialized[port] || !_Enabled[port])
+    {
+      // Skip if not initialized or not enabled
+    }
+    else if (QUEUE_GetCount(_Queue[port].TxQueue) == 0)
     {
       // Nothing to send
     }
     else if (!UART_IsTxReady(port))
     {
       // UART is busy; detect prolonged busy and recover
-      if (txBusySinceMs == 0)
+      if (txBusySinceMs[port] == 0)
       {
-        txBusySinceMs = TIMER_GetTick();
+        txBusySinceMs[port] = TIMER_GetTick();
       }
-      else if (TIMER_GetElapsed_ms(txBusySinceMs) > 200)
+      else if (TIMER_GetElapsed_ms(txBusySinceMs[port]) > 200)
       {
         HAL_UART_Abort((UART_HandleTypeDef*)_Handle[port]);
         HAL_UART_DeInit((UART_HandleTypeDef*)_Handle[port]);
@@ -249,12 +259,12 @@ bool SERIAL_Exec(void)
         }
 
         UART_Init(port, _Handle[port]);
-        txBusySinceMs = 0;
+        txBusySinceMs[port] = 0;
       }
     }
     else
     {
-      txBusySinceMs = 0;
+      txBusySinceMs[port] = 0;
       count = _FillTxUARTBuffer(port);
       if (count > 0)
       {
@@ -332,15 +342,24 @@ bool SERIAL_IsEnabled(tSerialPort Port)
  @param     Size: The number of bytes to send
  @return    The number of bytes sent
  *******************************************************************/
-int32_t SERIAL_SendPacket(tSerialPort Port, const uint8_t* Packet, uint8_t Size)
+uint32_t SERIAL_SendPacket(tSerialPort Port, const uint8_t* Packet, uint16_t Size)
 {
-  int32_t count;
-  int32_t sent = 0;
+  uint32_t count;
+  uint32_t sent = 0;
 
-  if (!IsPointerValid((uintptr_t)Packet))
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+    count = 0;
+  }
+  else if (!_Enabled[Port] || !_Initialized[Port])
+  {
+    // Ignore
+    count = 0;
+  }
+  else if (!IsPointerValid((uintptr_t)Packet))
   {
     assert_always();
-    count = -1;
+    count = 0;
   }
   else if (Size == 0)
   {
@@ -372,15 +391,15 @@ int32_t SERIAL_SendPacket(tSerialPort Port, const uint8_t* Packet, uint8_t Size)
  @param     C: The char to send
  @return    1 if successful, otherwise 0
  *******************************************************************/
-int32_t SERIAL_SendByte(tSerialPort Port, uint8_t C)
+uint32_t SERIAL_SendByte(tSerialPort Port, uint8_t C)
 {
-  int32_t count = 0;
+  uint32_t count = 0;
 
   if (Port >= NUM_SERIAL_PORTS)
   {
     // No
   }
-  else if (!_Enabled[Port])
+  else if (!_Enabled[Port] || !_Initialized[Port])
   {
     // Ignore
   }
@@ -413,15 +432,15 @@ bool SERIAL_SendString(tSerialPort Port, char const* Str)
  @param     C: The char to receive
  @return    1 if successful, otherwise 0
  *******************************************************************/
-int32_t SERIAL_ReceiveByte(tSerialPort Port, uint8_t* C)
+uint32_t SERIAL_ReceiveByte(tSerialPort Port, uint8_t* C)
 {
-  int32_t count = 0;
+  uint32_t count = 0;
 
   if (Port >= NUM_SERIAL_PORTS)
   {
     // No
   }
-  else if (!_Enabled[Port])
+  else if (!_Enabled[Port] || !_Initialized[Port])
   {
     // Ignore
   }
@@ -440,8 +459,11 @@ int32_t SERIAL_ReceiveByte(tSerialPort Port, uint8_t* C)
  @param     Packet: The pointer to the array of data
  @param     Size: The number of bytes to retrieve
  @return    The number of bytes recieved
+
+ @note      Use with care for large buffer sizes. Function is blocking with a timeout;
+            it will wait until the specified number of bytes are received or the timeout is reached.
  *******************************************************************/
-int32_t SERIAL_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint8_t Size)
+uint32_t SERIAL_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint16_t Size)
 {
   uint8_t c;
   uint32_t count = 0;
@@ -470,9 +492,9 @@ int32_t SERIAL_ReceivePacket(tSerialPort Port, uint8_t* Packet, uint8_t Size)
  @param     Port: The desired serial port
  @return    The number of bytes in the Rx queue
  *******************************************************************/
-int16_t SERIAL_GetRxCount(tSerialPort Port)
+uint16_t SERIAL_GetRxCount(tSerialPort Port)
 {
-  return QUEUE_GetCount(_Queue[Port].RxQueue);
+  return (Port < NUM_SERIAL_PORTS) ? QUEUE_GetCount(_Queue[Port].RxQueue) : 0;
 }
 
 /*******************************************************************/
@@ -481,9 +503,9 @@ int16_t SERIAL_GetRxCount(tSerialPort Port)
  @param     Port: The desired serial port
  @return    The number of bytes in the Tx queue
  *******************************************************************/
-int16_t SERIAL_GetTxCount(tSerialPort Port)
+uint16_t SERIAL_GetTxCount(tSerialPort Port)
 {
-  return QUEUE_GetCount(_Queue[Port].TxQueue);
+  return (Port < NUM_SERIAL_PORTS) ? QUEUE_GetCount(_Queue[Port].TxQueue) : 0;
 }
 
 /*******************************************************************/
@@ -492,7 +514,7 @@ int16_t SERIAL_GetTxCount(tSerialPort Port)
  @param     Port: The desired serial port
  @return    The number of overflows
  *******************************************************************/
-int32_t SERIAL_GetRxOverflowCount(tSerialPort Port)
+uint32_t SERIAL_GetRxOverflowCount(tSerialPort Port)
 {
   return (Port < NUM_SERIAL_PORTS) ? _RxOverflow[Port] : 0;
 }
@@ -503,7 +525,7 @@ int32_t SERIAL_GetRxOverflowCount(tSerialPort Port)
  @param     Port: The desired serial port
  @return    The number of overflows
  *******************************************************************/
-int32_t SERIAL_GetTxOverflowCount(tSerialPort Port)
+uint32_t SERIAL_GetTxOverflowCount(tSerialPort Port)
 {
   return (Port < NUM_SERIAL_PORTS) ? _TxOverflow[Port] : 0;
 }
@@ -518,7 +540,10 @@ bool SERIAL_FlushRx(tSerialPort Port)
 {
   bool success = false;
 
-  if (Port < NUM_SERIAL_PORTS)
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+  }
+  else if (_Initialized[Port] && _Enabled[Port])
   {
     QUEUE_Flush(_Queue[Port].RxQueue);
     success = true;
@@ -529,7 +554,7 @@ bool SERIAL_FlushRx(tSerialPort Port)
 
 /*******************************************************************/
 /*!
- @brief     Flush the Rx queue
+ @brief     Flush the Tx queue
  @param     Port: The desired serial port
  @return    True if successful
  *******************************************************************/
@@ -537,7 +562,10 @@ bool SERIAL_FlushTx(tSerialPort Port)
 {
   bool success = false;
 
-  if (Port < NUM_SERIAL_PORTS)
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+  }
+  else if (_Initialized[Port] && _Enabled[Port])
   {
     QUEUE_Flush(_Queue[Port].TxQueue);
     success = true;
@@ -581,7 +609,10 @@ uint32_t SERIAL__PushRxChar(tSerialPort Port, uint8_t c)
 {
   uint32_t ret = 0;
 
-  if (_Enabled[Port])
+  if (Port >= NUM_SERIAL_PORTS)
+  {
+  }
+  else if (_Enabled[Port] && _Initialized[Port])
   {
     if (QUEUE_Enque(_Queue[Port].RxQueue, &c))
     {

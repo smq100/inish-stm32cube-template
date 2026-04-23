@@ -55,7 +55,6 @@
 /* Private define ------------------------------------------------------------*/
 
 #define COMMAND_BUFFER_SIZE_RX 256
-#define RESPONSE_BUFFER_SIZE 256
 #define CRC_BUFFER_SIZE_RX 5  ///< 4 chars for CRC plus the CRC delimiter
 #define MAX_STREAM_ITEMS 5    ///< Max number of streaming data values
 #define MAX_TOKENS eDAQ_Entry_NUM
@@ -211,7 +210,7 @@ static const bool _AuthRequired = TECH_AUTH_REQUIRED;        ///< Require login 
 static const char* _AuthUser = TECH_AUTH_USER;               ///< The username required for login (if login is enabled)
 static const char* _AuthPassword = TECH_AUTH_PASSWORD;       ///< The password required for login (if login is enabled)
 static const uint8_t _AuthUserPWSize = TECH_AUTH_USERPW_SZ;  ///< Max size of the user and pwd
-static const uint32_t _MaxResponseSize = RESPONSE_BUFFER_SIZE - 1;  ///< Size of the response
+static const uint32_t _MaxResponseSize = TECH_RESPONSE_MAXSIZE - 1;  ///< Size of the response
 
 // clang-format off
 //! Tech commands and associated handlers
@@ -253,7 +252,7 @@ static_assert(NUM_TECH_ERRORS == (sizeof(_ErrorStr) / sizeof(_ErrorStr[0])), "TE
 static tRuntime _Runtime;  //!< Runtime data
 
 static uint8_t _ParseBuffer[COMMAND_BUFFER_SIZE_RX];  //!< The Rx buffer for parsing
-static char _ResponseBuffer[RESPONSE_BUFFER_SIZE];    //!< The message buffer
+static char _ResponseBuffer[TECH_RESPONSE_MAXSIZE];   //!< The message buffer
 
 static uint8_t _QueueBufferRx[COMMAND_BUFFER_SIZE_RX];  //!< The Rx queue buffer
 static tQueue _QueueRx;                                 //!< Queue of Rx buffer
@@ -371,7 +370,7 @@ static bool _Process(void)
 {
   static uint32_t time = 0;
   uint8_t c;
-  char response[RESPONSE_BUFFER_SIZE];
+  char response[TECH_RESPONSE_MAXSIZE];
 
   if (_Runtime.State == eTechState_Init)
   {
@@ -804,7 +803,7 @@ static bool _ProcessStream(void)
 {
   bool success = true;
   uint32_t time;
-  char response[RESPONSE_BUFFER_SIZE];
+  char response[TECH_RESPONSE_MAXSIZE];
 
   time = TIMER_GetElapsed_ms(_Runtime.Stream.Time);
   if (time < _Runtime.Stream.Interval)
@@ -991,7 +990,7 @@ static bool _Handler_Auth(char* StreamTokens)
 static bool _Handler_System(char* StreamTokens)
 {
   bool success = true;
-  char output[RESPONSE_BUFFER_SIZE];
+  char output[TECH_RESPONSE_MAXSIZE];
 
   uint32_t hw = SYSTEM_GetHWVersion();
 
@@ -1055,7 +1054,7 @@ static bool _Handler_Reset(char* StreamTokens)
 static bool _Handler_Meta(char* StreamTokens)
 {
   bool success = false;
-  char output[RESPONSE_BUFFER_SIZE];
+  char output[TECH_RESPONSE_MAXSIZE];
   int entry, items;
 
   items = sscanf(_Tokens[1], "%i", &entry);
@@ -1119,34 +1118,30 @@ static bool _Handler_Meta(char* StreamTokens)
 static bool _Handler_Tasks(char* StreamTokens)
 {
   int entry, items;
+  char output[TECH_RESPONSE_MAXSIZE];
   bool success = false;
 
   items = sscanf(_Tokens[1], "%i", &entry);
 
-  LOG_Print(eLogger_Sys, "", true);
-  if (items == 1)
+  if (items < 1)
   {
-    // Print specific task details
-    if (entry < 0)
+    // Print summary
+    if (TASK_PrintStatus((tTask)0, true, output, _MaxResponseSize) > 0)
     {
-      TASK_PrintStatus((tTask)0, true);
-      success = true;
-    }
-    else if (entry < eTask_NUM)
-    {
-      TASK_PrintStatus((tTask)entry, false);
       success = true;
     }
   }
-  else
+  else if (entry < eTask_NUM)
   {
-    // Print all tasks summary
-    for (tTask i = 0; i < eTask_NUM; i++)
+    if (TASK_PrintStatus((tTask)entry, false, output, _MaxResponseSize) > 0)
     {
-      TASK_PrintStatus(i, false);
+      success = true;
     }
+  }
 
-    success = true;
+  if (success)
+  {
+    strncpy(_ResponseBuffer, output, _MaxResponseSize);
   }
 
   return success;
@@ -1188,8 +1183,8 @@ static bool _Handler_Get(char* StreamTokens)
   {
     tDAQ_Entry entry = (tDAQ_Entry)v[0];
     uint8_t index = (items == 2) ? v[1] : 0;
-    char item[RESPONSE_BUFFER_SIZE];
-    char output[RESPONSE_BUFFER_SIZE] = { '\0' };
+    char item[TECH_RESPONSE_MAXSIZE];
+    char output[TECH_RESPONSE_MAXSIZE] = { '\0' };
     char note[MAX_NOTE_SIZE] = { '\0' };
 
     if (entry < _NumDAQEntries)
@@ -1252,9 +1247,9 @@ static bool _Handler_Get(char* StreamTokens)
       // Append note if there is one
       if (strlen(note) > 0)
       {
-        char buf[RESPONSE_BUFFER_SIZE];
+        char buf[TECH_RESPONSE_MAXSIZE];
         sprintf(buf, ",\"note\":\"%s\"", note);
-        strncat(output, buf, RESPONSE_BUFFER_SIZE - strlen(output) - 1);
+        strncat(output, buf, TECH_RESPONSE_MAXSIZE - strlen(output) - 1);
       }
 
       // Copy final output to response buffer
@@ -1346,8 +1341,8 @@ static bool _Handler_ReadMemory(char* StreamTokens)
     uint8_t buffer[MAX_MEMREAD_LEN];
     if (ReadMemory((uintptr_t)address, buffer, len) > 0)
     {
-      char output[RESPONSE_BUFFER_SIZE];
-      char data[RESPONSE_BUFFER_SIZE];
+      char output[TECH_RESPONSE_MAXSIZE];
+      char data[TECH_RESPONSE_MAXSIZE];
       char* ptr = data;
 
       // Fill text buffer with LSB on the right (little-endian format)
@@ -1376,7 +1371,7 @@ static bool _Handler_ReadMemory(char* StreamTokens)
  *******************************************************************/
 static bool _Handler_GetLog(char* StreamTokens)
 {
-  char output[RESPONSE_BUFFER_SIZE];
+  char output[TECH_RESPONSE_MAXSIZE];
   char log[MAX_DEBUGLOG_CHARS_TOT];
   int entry, items;
   bool success = false;
@@ -1630,7 +1625,7 @@ static bool _Handler_StreamStop(char* StreamTokens)
  *******************************************************************/
 static bool _Handler_Fault(char* StreamTokens)
 {
-  char output[RESPONSE_BUFFER_SIZE];
+  char output[TECH_RESPONSE_MAXSIZE];
   int entry, items;
   bool success = false;
 
