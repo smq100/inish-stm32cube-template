@@ -76,7 +76,6 @@ typedef struct
 /* Private variables ---------------------------------------------------------*/
 
 static const char* _Module = "T_LED";                //!< Module name for debug logging
-static const float _TestStep_S = 0.50f;              //!< Time between LED tests in seconds
 static const float _PulseDuration_S = 0.2f;          //!< Duration of LED pulse in seconds
 static const uint8_t _MaxKeyLength = MAX_KEYLENGTH;  //!< The max keylength of an LED locking string
 static const bool _DisableLocking = true;            //!< True when locking LED is disabled
@@ -92,7 +91,6 @@ static const tLEDConfig _Config[] = {
 static_assert(sizeof(_Config) / sizeof(_Config[0]) == eLED_NUM, "tLEDConfig size mismatch");
 
 static bool _Initialized = false;       //!< True when module is initialized
-static bool _Testing = false;           //!< True during POST
 static tLEDRuntime _Runtime[eLED_NUM];  //!< Runtime data of the LEDs
 
 /* Private function prototypes -----------------------------------------------*/
@@ -101,7 +99,6 @@ static void _OnOff(tLED led, bool On);
 static void _ProcessEffects(tLED led);
 static void _ProcessPulse(tLED led);
 static void _ToggleFlash(tLED led);
-static void _ProcessTest(void);
 
 /* Public Implementation -----------------------------------------------------*/
 
@@ -159,20 +156,13 @@ bool LED_Init(void)
 bool LED_Exec(void)
 {
   // Process any LEDs testing
-  if (!_Initialized)
-  {
-  }
-  else if (!_Testing)
+  if (_Initialized)
   {
     // Process any flashing LEDs
     for (tLED led = (tLED)0; led < eLED_NUM; led++)
     {
       _ProcessEffects(led);
     }
-  }
-  else
-  {
-    _ProcessTest();
   }
 
   return true;
@@ -200,7 +190,17 @@ bool LED_Shutdown(void)
  *******************************************************************/
 bool LED_Test(void)
 {
-  // _Testing = true;
+  for (tLED led = (tLED)0; led < eLED_NUM; led++)
+  {
+    _OnOff(led, true);
+  }
+  TIMER_DelayMs(100);
+
+  for (tLED led = (tLED)0; led < eLED_NUM; led++)
+  {
+    _OnOff(led, false);
+  }
+  TIMER_DelayMs(100);
 
   return true;
 }
@@ -215,33 +215,39 @@ bool LED_Test(void)
  *******************************************************************/
 bool LED_OnOff(tLED led, bool On, const char* Key)
 {
-  bool success = true;
+  bool success = false;
 
   if (!_Initialized)
   {
-    success = false;
+    assert_always();
   }
   else if (led >= eLED_NUM)
   {
     // Invalid LED
-    success = false;
+    assert_param(false);
   }
   else if (_Runtime[led].Lit == On)
   {
     // No change
-    success = false;
+    success = true;
   }
   else if (_Runtime[led].Key[0] == '\0')
   {
     // LED is unlocked
     _OnOff(led, On);
     LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "LED '%s': %s", _Config[led].Name, On ? "ON" : "OFF");
+    success = true;
   }
   else if (strncmp(_Runtime[led].Key, Key, _MaxKeyLength) == 0)
   {
     // Keys match
     _OnOff(led, On);
     LOG_Write(eLogger_Sys, eLogLevel_Low, _Module, false, "LED '%s': %s", _Config[led].Name, On ? "ON" : "OFF");
+    success = true;
+  }
+  else
+  {
+    // LED is locked and keys do not match
   }
 
   return success;
@@ -256,25 +262,31 @@ bool LED_OnOff(tLED led, bool On, const char* Key)
  *******************************************************************/
 bool LED_Toggle(tLED led, const char* Key)
 {
-  bool success = true;
+  bool success = false;
 
   if (!_Initialized)
   {
-    success = false;
+    assert_always();
   }
   else if (led >= eLED_NUM)
   {
-    success = false;
+    assert_param(false);
   }
   else if (_Runtime[led].Key[0] == '\0')
   {
     // LED is unlocked
     _OnOff(led, !_Runtime[led].Lit);
+    success = true;
   }
   else if (strncmp(_Runtime[led].Key, Key, _MaxKeyLength) == 0)
   {
     // Keys match
     _OnOff(led, !_Runtime[led].Lit);
+    success = true;
+  }
+  else
+  {
+    // LED is locked and keys do not match
   }
 
   return success;
@@ -295,9 +307,11 @@ bool LED_Flash(tLED led, float Secs, int32_t Qty, const char* Key)
 
   if (!_Initialized)
   {
+    assert_always();
   }
   else if (led >= eLED_NUM)
   {
+    assert_param(false);
   }
   else if (Secs < 0.10f)
   {
@@ -306,29 +320,26 @@ bool LED_Flash(tLED led, float Secs, int32_t Qty, const char* Key)
   else if (_Runtime[led].Key[0] == '\0')
   {
     // LED is unlocked
+    _OnOff(led, true);
     _Runtime[led].Flash.Active = true;
     _Runtime[led].Flash.Interval_S = Secs;
     _Runtime[led].Flash.Qty = Qty - 1;
     _Runtime[led].Flash.Pulses = 0;
     _Runtime[led].Flash.PulsesRemain = -1;
     _Runtime[led].Flash.FlashTime = TIMER_GetTick();
-
-    _OnOff(led, true);
 
     success = true;
   }
   else if (strncmp(_Runtime[led].Key, Key, _MaxKeyLength) == 0)
   {
     // Keys match
+    _OnOff(led, true);
     _Runtime[led].Flash.Active = true;
     _Runtime[led].Flash.Interval_S = Secs;
     _Runtime[led].Flash.Qty = Qty - 1;
     _Runtime[led].Flash.Pulses = 0;
     _Runtime[led].Flash.PulsesRemain = -1;
-
     _Runtime[led].Flash.FlashTime = TIMER_GetTick();
-
-    _OnOff(led, true);
 
     success = true;
   }
@@ -352,6 +363,7 @@ bool LED_Pulse(tLED led, float Secs, int32_t Qty, int32_t Pulses, const char* Ke
 
   if (!_Initialized)
   {
+    assert_always();
   }
   else if (led < eLED_NUM)
   {
@@ -397,7 +409,7 @@ void LED_Lock(tLED led, bool Lock, const char* Key)
 {
   if (led >= eLED_NUM)
   {
-    // Say what?
+    assert_param(false);
   }
   else if (_DisableLocking)
   {
@@ -424,6 +436,7 @@ void LED_Lock(tLED led, bool Lock, const char* Key)
   else if (strncmp(_Runtime[led].Key, Key, _MaxKeyLength) != 0)
   {
     // Not the owner
+    assert_param(false);
   }
   else if (Lock)
   {
@@ -456,16 +469,6 @@ bool LED_IsLocked(tLED led)
   }
 
   return locked;
-}
-
-/*******************************************************************/
-/*!
- @brief		Returns the testing status
- @return	True if module is being tested
- *******************************************************************/
-bool LED_IsTesting(void)
-{
-  return _Testing;
 }
 
 /* Private Implementation -----------------------------------------------------*/
@@ -613,43 +616,5 @@ static void _ToggleFlash(tLED led)
     HAL_GPIO_WritePin(_Config[led].GPIO.Port, _Config[led].GPIO.Pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
     _Runtime[led].Flash.Lit = on;
-  }
-}
-
-/*******************************************************************/
-/*!
- @brief     Process POST testing
- *******************************************************************/
-static void _ProcessTest(void)
-{
-  static bool testInProgress = false;
-  static uint32_t time_test = 0;
-  tLED led;
-
-  if (testInProgress)
-  {
-    if (TIMER_GetElapsed_s(time_test) > _TestStep_S)
-    {
-      // Turn off LEDs
-      for (led = (tLED)0; led < eLED_NUM; led++)
-      {
-        LED_OnOff(led, false, "");
-      }
-
-      // All done testing
-      _Testing = testInProgress = false;
-    }
-  }
-  else
-  {
-    testInProgress = true;
-
-    // Turn on board LEDs
-    for (led = (tLED)0; led < eLED_NUM; led++)
-    {
-      LED_OnOff(led, true, "");
-    }
-
-    time_test = TIMER_GetTick();
   }
 }

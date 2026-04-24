@@ -471,6 +471,10 @@ static bool _ProcessStatusLED(void)
   {
     LED_Pulse(eLED_Status, 1.0f, -1, (int32_t)(_LEDErrorPulseCount), "");
   }
+  else if (_StatusLEDState == eStatusLED_Bypass)
+  {
+    // Do not change the LED state since something else is controlling it
+  }
 
   if (state != _StatusLEDState)
   {

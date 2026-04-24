@@ -63,7 +63,6 @@ bool LED_Pulse(tLED led, float Secs, int32_t Qty, int32_t Pulses, const char* Ke
 bool LED_IsOn(tLED led);
 void LED_Lock(tLED led, bool Lock, const char* Key);
 bool LED_IsLocked(tLED led);
-bool LED_IsTesting(void);
 
 #ifdef LED_PROTECTED
 

@@ -96,18 +96,10 @@ void POWER_Sleep(void)
   // Suspend Tick increment to prevent wakeup by Systick interrupt. Otherwise
   // the Systick interrupt will wake up the device within 1ms (HAL time base)
 
-#ifndef TEST__DISABLE_IWDG
-  HAL_IWDG_Refresh(&hIWDG_APP);
-#endif
-
   HAL_SuspendTick();
   __HAL_RCC_PWR_CLK_ENABLE();
   HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
   HAL_ResumeTick();
-
-#ifndef TEST__DISABLE_IWDG
-  HAL_IWDG_Refresh(&hIWDG_APP);
-#endif
 
   // Convert sleep to milliseconds (hTIM_SLEEP_IWDG_CNT freq is 4.0 MHz)
   uint32_t sleep_toc = __HAL_TIM_GET_COUNTER(&hTIM_SLEEP_IWDG_CNT);

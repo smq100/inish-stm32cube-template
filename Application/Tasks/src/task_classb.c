@@ -189,6 +189,8 @@ bool CLASSB_Exec(void)
     // If previous error, run handler with enabled=false to skip test but
     // still run any necessary code (e.g. control flow)
     status = _Config[current].Handler(false);
+
+    ClassB_WdgHeartbeat(CLASSB_WDG_HB_CLASSB);
   }
 
   if (status == eClassBRunStatus_NOT_STARTED)

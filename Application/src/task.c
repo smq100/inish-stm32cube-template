@@ -127,6 +127,7 @@ when printed.
 #include "task_tech.h"
 #include "task_buttons.h"
 #include "task_led.h"
+#include "classb.h"
 #include "classb_vars.h"
 #include "timer.h"
 #include "power.h"
@@ -196,6 +197,10 @@ static uint16_t _ShutdownTimeout_ms = 0;  //!< Shutdown timer in ms. 0 means shu
 static uint32_t _ShutdownTimestamp = 0;   //!< Shutdown timestamp used to track shutdown timeout
 static bool _ShutdownInProcess = false;   //!< True when shutdown has been initiated
 static float _IdleTimeTotal_s = 0.0f;     //!< Total time spent in scheduler idle hook
+
+static const uint32_t _TaskBreadcrumbMagic = 0x5441534Bu;  // 'TASK'
+static uint32_t _LastTaskBreadcrumbMagic __attribute__((section(".noinit")));
+static uint32_t _LastTaskBreadcrumbValue __attribute__((section(".noinit")));
 
 /* Private function prototypes -----------------------------------------------*/
 static void _ProcessLoopMetrics(void);
@@ -362,6 +367,10 @@ bool TASK_Exec(void)
     {
       // Execute the task executive if the delay tick value is greater than desired
       {
+        // Persist the currently running task so reset diagnostics can report where execution was.
+        _LastTaskBreadcrumbValue = (uint32_t)_ActiveTask;
+        _LastTaskBreadcrumbMagic = _TaskBreadcrumbMagic;
+
         _Runtime[_ActiveTask].Timestamp = TIMER_GetTick();
 
         if (_MetricsEnabled)
@@ -402,6 +411,9 @@ bool TASK_Exec(void)
     {
       _ActiveTask = (tTask)0;
       ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
+
+      // Scheduler heartbeat proves the cooperative loop is still making forward progress
+      ClassB_WdgHeartbeat(CLASSB_WDG_HB_TASK_LOOP);
 
       if (_IdleHookEnabled && !taskRan && !_ShutdownInProcess)
       {
@@ -658,6 +670,51 @@ bool TASK_GetLoad(tTaskLoad* Load)
 const char* TASK_GetName(tTask Task)
 {
   return (Task < _NumTasks) ? _Config[Task].Name : "error";
+}
+
+/*******************************************************************/
+/*!
+ @brief     Gets reset-persistent breadcrumb for last task that entered Exec
+ @param     Task: Output pointer for task enum
+ @param     Name: Output pointer for task name
+ @return    True if breadcrumb is valid, false otherwise
+
+ *******************************************************************/
+bool TASK_GetLastRunningBeforeReset(tTask* Task, const char** Name)
+{
+  bool success = false;
+
+  if (Task == NULLPTR || Name == NULLPTR)
+  {
+    // Invalid pointers
+  }
+  else if (_LastTaskBreadcrumbMagic != _TaskBreadcrumbMagic)
+  {
+    // No valid breadcrumb data
+  }
+  else if (_LastTaskBreadcrumbValue >= (uint32_t)_NumTasks)
+  {
+    // Corrupt breadcrumb data
+  }
+  else
+  {
+    *Task = (tTask)_LastTaskBreadcrumbValue;
+    *Name = _Defaults[*Task].Name;
+    success = true;
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Clears reset-persistent breadcrumb for last running task
+
+ *******************************************************************/
+void TASK_ClearLastRunningBeforeReset(void)
+{
+  _LastTaskBreadcrumbMagic = 0u;
+  _LastTaskBreadcrumbValue = 0u;
 }
 
 /*******************************************************************/

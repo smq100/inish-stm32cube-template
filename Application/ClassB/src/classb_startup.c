@@ -207,12 +207,14 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
   if (!Enabled)
   {
     ClassB_ControlFlowEnter(FLOW_START_IWDG);
+    ClassB_ClearExpectedIWDGReset();
     printf("*** IWDG startup test disabled\n\r");
     *Status = TEST_CLASSB_PASS;
   }
   else if (*Status == TEST_CLASSB_NOINIT)
   {
     *Status = TEST_CLASSB_INPROGRESS;
+    ClassB_MarkExpectedIWDGReset();
     ClassB_ExpireIWDG();
     while (1)
     {
@@ -221,7 +223,7 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
   }
   else if (*Status == TEST_CLASSB_INPROGRESS)
   {
-    if (reset_cause & RCC_CSR_IWDGRSTF)
+    if ((reset_cause & RCC_CSR_IWDGRSTF) && ClassB_IsExpectedIWDGReset())
     {
       // Independent watchdog reset detected; test passed
       *Status = TEST_CLASSB_PASS;
@@ -231,6 +233,8 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
       // Independent watchdog reset not detected; test failed
       *Status = TEST_CLASSB_FAIL;
     }
+
+    ClassB_ClearExpectedIWDGReset();
   }
 
   // Call 2 times to compensate for the timeout on first pass

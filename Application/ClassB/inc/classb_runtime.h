@@ -66,9 +66,7 @@ typedef tClassBRunStatus(fnClassBHandler_Runtime)(bool Enabled);
 
 /* Exported constants --------------------------------------------------------*/
 /* Exported macros ------------------------------------------------------------*/
-
 /* Exported vars ------------------------------------------------------------ */
-
 /* Exported functions ------------------------------------------------------- */
 
 bool Runtime_Init(void);

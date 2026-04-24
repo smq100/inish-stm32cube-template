@@ -56,7 +56,7 @@
 
 /* USER CODE BEGIN PV */
 static uint32_t _ResetCause;
-static bool _iwdg_init_done = false;
+static bool _iwdg_require_heartbeat = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,6 +104,7 @@ int main(void)
   HAL_PWR_EnableBkUpAccess();
 
   bool vars_reset = ClassB_InitVars(false);
+  ClassB_WdgResetDiagnosticsInit();
 
   printf("\r\nHello, World! (csr=0x%08lX, vr=%d)\r\n", _ResetCause, vars_reset);
 
@@ -125,7 +126,6 @@ int main(void)
   MX_ADC_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  _iwdg_init_done = true;
 
   // Post-initialization ClassB tests
   ClassB_DoStartUpTests(false);
@@ -141,6 +141,9 @@ int main(void)
 
   // Initialize all tasks
   TASK_Init();
+
+  // Require watchdog heartbeat from task loop
+  _iwdg_require_heartbeat = true;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -214,21 +217,23 @@ static void RefreshWatchdogs(void)
   static const uint32_t refresh_interval_ms = 25;
   static uint32_t refresh_tick = 0;
 
-  if (!_iwdg_init_done)
-  {
-    // Don't refresh IWDG until it's initialized
-  }
-  else if ((TIMER_GetElapsed_ms(refresh_tick)) >= refresh_interval_ms)
+  if ((TIMER_GetElapsed_ms(refresh_tick)) >= refresh_interval_ms)
   {
     refresh_tick = TIMER_GetTick();
 
     if (ClassB_IsTestingIWDG())
     {
-      // Don't refresh IWDG if we're testing it in ClassB startup tests
+      // Don't refresh IWDG if we're testing it in ClassB startup tests or manually testing via a Tech Mode command
+    }
+    else if (_iwdg_require_heartbeat && !ClassB_WdgCanRefresh())
+    {
+      // Skip IWDG refresh until required heartbeat sources report in.
     }
     else
     {
+#ifndef TEST__DISABLE_IWDG
       HAL_IWDG_Refresh(&hIWDG_APP);
+#endif
     }
   }
 }
@@ -237,10 +242,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == hTIM_SLEEP_IWDG_CNT.Instance)
   {
-    if (_iwdg_init_done)
-    {
-      RefreshWatchdogs();
-    }
+    RefreshWatchdogs();
   }
 }
 

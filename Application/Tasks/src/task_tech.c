@@ -43,7 +43,10 @@
 #include "version.h"
 #include "task.h"
 #include "task_tech.h"
+#include "task_system.h"
 #include "task_daq.h"
+#include "task_daq.h"
+#include "task_led.h"
 #include "task_system.h"
 #include "classb_runtime.h"
 #include "eeprom_mcu.h"
@@ -75,6 +78,7 @@ typedef enum
   eTechCommand_Tasks,         ///< Provide tasks data
   eTechCommand_Get,           ///< Provide DAQ data
   eTechCommand_Set,           ///< Modify DAQ data
+  eTechCommand_Led,           ///< Control LEDs
   eTechCommand_ReadMemory,    ///< Read memory data
   eTechCommand_GetLog,        ///< Retrieve log data
   eTechCommand_StreamItems,   ///< Specifiy items needed for the stream
@@ -177,6 +181,7 @@ static const fnHandler _Handler_Meta;
 static const fnHandler _Handler_Tasks;
 static const fnHandler _Handler_Get;
 static const fnHandler _Handler_Set;
+static const fnHandler _Handler_LED;
 static const fnHandler _Handler_ReadMemory;
 static const fnHandler _Handler_GetLog;
 static const fnHandler _Handler_StreamStart;
@@ -224,6 +229,7 @@ static const tConfig _Config[] = {
   { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "tasks", .Handler = _Handler_Tasks },
   { .Enabled = true, .AuthReq = false, .Streamable = true, .Name = "get", .Handler = _Handler_Get },
   { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "set", .Handler = _Handler_Set },
+  { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "led", .Handler = _Handler_LED },
   { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "readmem", .Handler = _Handler_ReadMemory },
   { .Enabled = true, .AuthReq = false, .Streamable = false, .Name = "log", .Handler = _Handler_GetLog },
   { .Enabled = true, .AuthReq = true, .Streamable = false, .Name = "sitems", .Handler = _Handler_StreamItems },
@@ -931,6 +937,7 @@ static bool _Handler_Help(char* StreamTokens)
   _WriteMessage("tasks (n)     Returns task information (n=task, otherwise all tasks, -1 for idle metrics)", true);
   _WriteMessage("get n(,m)     Returns a DAQ value. n=item, m=optional subitems (no spaces between items)", true);
   _WriteMessage("set n,v       Set a DAQ value. n=DAQ item, v=numeric value (not all items modifiable)", true);
+  _WriteMessage("led c,n,(c,p) Set an LED state. c=cmd, n=LED index", true);
   _WriteMessage("log n         Returns log information. n=log index", true);
   _WriteMessage("sitems n[m]   Specify items for DAQ streaming", true);
   _WriteMessage("sstart get,f  Start DAQ streaming. 'get'=cmd (only 'get' is supported), f=frequency in Hz", true);
@@ -1013,19 +1020,18 @@ static bool _Handler_System(char* StreamTokens)
 static bool _Handler_Reboot(char* StreamTokens)
 {
   int items;
-  uint16_t entry;
+  int wdg = 0;
 
-  items = sscanf(_Tokens[1], "%hu", &entry);
+  items = sscanf(_Tokens[1], "%i", &wdg);
 
   if (items <= 0)
   {
-    // Will not return as system will reboot
     SYSTEM__BeginShutdown(0);
   }
-  else if (items == 1)
+  else if (wdg > 0)
   {
-    // Will not return as system will reboot
-    SYSTEM__BeginShutdown(entry);
+    // Force reset by starving the watchdog
+    ClassB_ExpireIWDG();
   }
 
   return true;
@@ -1298,6 +1304,74 @@ static bool _Handler_Set(char* StreamTokens)
       val.Float = value;
 
       success = DAQ_WriteItem((tDAQ_Entry)entry, 0, val);
+    }
+  }
+
+  return success;
+}
+
+/*******************************************************************/
+/*!
+ @brief     Command handler for 'LED' command
+ @param     StreamTokens: command parameters if streaming (not used for this command)
+ @return    True if successful
+ *******************************************************************/
+static bool _Handler_LED(char* StreamTokens)
+{
+  int items = 0;
+  int p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+  bool success = false;
+  char cmd;
+
+  items = sscanf(_Tokens[1], "%c,%i,%i,%i,%i", &cmd, &p1, &p2, &p3, &p4);
+
+  if (cmd == 'n')  // On
+  {
+    if (items == 2)
+    {
+      LED_OnOff((tLED)p1, false, "");
+      SYSTEM_SetStatusLED(eStatusLED_Bypass, 0);
+      success = LED_OnOff((tLED)p1, true, "");
+    }
+  }
+  else if (cmd == 'o')  // Off
+  {
+    if (items == 2)
+    {
+      SYSTEM_SetStatusLED(eStatusLED_Bypass, 0);
+      success = LED_OnOff((tLED)p1, false, "");
+    }
+  }
+  else if (cmd == 't')  // Toggle
+  {
+    if (items == 2)
+    {
+      SYSTEM_SetStatusLED(eStatusLED_Bypass, 0);
+      success = LED_Toggle((tLED)p1, "");
+    }
+  }
+  else if (cmd == 'f')  // Flash
+  {
+    if (items == 4)
+    {
+      SYSTEM_SetStatusLED(eStatusLED_Bypass, 0);
+      success = LED_Flash((tLED)p1, (float)p2, (int32_t)p3, "");
+    }
+  }
+  else if (cmd == 'p')  // Pulse
+  {
+    if (items == 5)
+    {
+      SYSTEM_SetStatusLED(eStatusLED_Bypass, 0);
+      success = LED_Pulse((tLED)p1, (float)p2, (int32_t)p3, (int32_t)p4, "");
+    }
+  }
+  else if (cmd == 's')  // Set system state
+  {
+    if (items <= 3)
+    {
+      SYSTEM_SetStatusLED((tStatusLEDState)p1, (uint8_t)p2);
+      success = true;
     }
   }
 

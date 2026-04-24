@@ -440,10 +440,6 @@ tClassBRunStatus Runtime_WDGTest(bool Enabled)
 
   if (Enabled)
   {
-#ifndef TEST__DISABLE_IWDG
-    success = HAL_IWDG_Refresh(&hIWDG_APP) == HAL_OK;
-#endif
-
     if (ClassB__GetFault(eClassBRunItem_WDG))
     {
       success = false;
