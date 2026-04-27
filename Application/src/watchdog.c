@@ -33,7 +33,7 @@
 /* Public variables ----------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
-// static const char* _Module = "WDG";
+static const char* _Module = "WDG";
 
 static const uint32_t _ExpectedMagic = 0x57444754u;  // 'WDGT'
 static bool _Disabled = false;
@@ -53,7 +53,7 @@ static bool _Starve = false;  ///< Force IWDG reset
 *******************************************************************/
 void WDG_Disable(void)
 {
-  printf("Disabled IWDG. Waiting for reset...\r\n");
+  LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Disabled IWDG. Waiting for reset...");
   _Disabled = true;
 }
 

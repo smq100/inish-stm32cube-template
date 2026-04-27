@@ -34,7 +34,7 @@
 #include "test.h"
 
 #ifdef TEST__DISABLE_LOGGING
-#warning Debug logging enabled
+#warning Debug logging disabled
 #endif
 
 #ifdef TEST__ENABLE_DEBUG

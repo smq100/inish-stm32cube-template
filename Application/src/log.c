@@ -93,8 +93,8 @@ static uint32_t _CacheCount[eLogger_NUM] = { 0 };
 
 /* Private function prototypes -----------------------------------------------*/
 
-static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, const char* Output);
-static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, bool Direct, const char* Output);
+static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, const char* Output, bool Direct);
+static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, const char* Output, bool Persist, bool Direct);
 static bool _Update(tLogger Logger, char* Output);
 
 /* Public Implementation -----------------------------------------------------*/
@@ -195,7 +195,7 @@ bool LOG_Write(tLogger Logger, tLogLevel Level, const char* Module, bool Persist
     vsnprintf(output, _LenMsg, Fmt, args);
     va_end(args);
 
-    success = _Output(Logger, Level, Module, Persist, false, output);
+    success = _Output(Logger, Level, Module, output, Persist, false);
   }
 
   return success;
@@ -212,17 +212,15 @@ bool LOG_Write(tLogger Logger, tLogLevel Level, const char* Module, bool Persist
  @param     ...: Additional arguments for formatting the log string
  @return    True if successful
 
+ @note      Always prints regardless of level
+
 *******************************************************************/
 bool LOG_WriteDirect(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, const char* Fmt, ...)
 {
   char output[MAX_DEBUGLOG_CHARS_TOT];
   bool success = false;
 
-  if (Level > _Level[Logger])
-  {
-    // Quickly bail if level is too low
-  }
-  else if (!IsPointerValid((uintptr_t)Module))
+  if (!IsPointerValid((uintptr_t)Module))
   {
     assert_always();
   }
@@ -237,7 +235,7 @@ bool LOG_WriteDirect(tLogger Logger, tLogLevel Level, const char* Module, bool P
     vsnprintf(output, _LenMsg, Fmt, args);
     va_end(args);
 
-    success = _Output(Logger, Level, Module, Persist, true, output);
+    success = _Output(Logger, Level, Module, output, Persist, true);
   }
 
   return success;
@@ -384,7 +382,7 @@ bool LOG_Progress(tLogger Logger, tLogLevel Level, const char* Module, char Dot)
 {
   bool success = false;
 
-  if (!_WillPrint(Logger, Level, Module, ""))
+  if (!_WillPrint(Logger, Level, Module, "", false))
   {
     // Nothing will print
   }
@@ -397,7 +395,7 @@ bool LOG_Progress(tLogger Logger, tLogLevel Level, const char* Module, char Dot)
   else
   {
     // Start a new line
-    success = _Output(Logger, Level, Module, false, false, "Starting progress bar: ");
+    success = _Output(Logger, Level, Module, "Starting progress bar: ", false, false);
     _Progress[Logger]++;
   }
 
@@ -412,20 +410,19 @@ bool LOG_Progress(tLogger Logger, tLogLevel Level, const char* Module, char Dot)
  @param     Logger: The desired logger
  @param     Level: The desired level
  @param     Module: The module name issuing the log
+ @param     Output: The log string
  @param     Persist: When true, log is stored in non-volatile memory
  @param     Direct: When true, the Output is sent directly to the UART without queuing
- @param     Output: The log string
- @param     Analysis: Bare output when true
  @return    True if output is sent
 
  *******************************************************************/
-static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Persist, bool Direct, const char* Output)
+static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, const char* Output, bool Persist, bool Direct)
 {
   char output[MAX_DEBUGLOG_CHARS_TOT];
   float uptime_s;
   bool proceed = false;
 
-  if (_WillPrint(Logger, Level, Module, Output))
+  if (_WillPrint(Logger, Level, Module, Output, Direct))
   {
     // Determine if we want to print the output based on id and timeout
     if (TIMER_GetElapsed_s(_Timestamp[Logger]) > _BlackoutS[Logger])
@@ -444,7 +441,10 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
     {
       // Prepend some useful stuff like time and tag
       uptime_s = SYSTEM_GetUpTime_MS() / 1000.0f;
-      char p = Persist ? '#' : ' ';
+
+      // Show a '*' for direct, a '#' for persistent, a 'x' for direct and persistent, or a blank for normal output
+      char p = Direct ? (Persist ? 'x' : '*') : (Persist ? '#' : ' ');
+
       snprintf(output, _LenTot, "[%10.3f] %c%-4s : %6s : %s", uptime_s, p, _LevelName[Level], Module, Output);
 
       if (_Progress[Logger] > 0)
@@ -473,12 +473,11 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
       }
       else
       {
-        // Send directly to the UART without queuing in the serial task
-        if (!UART_SendString(_Port[Logger], output, true))
-        {
-          // Some chars were not sent. Overflow?
-          assert_always();
-        }
+        // Send directly to the boot UART without queuing for the serial task
+        // Useful for early boot logs before the scheduler is running
+        // but also for critical logs that we want to ensure get out without waiting
+        // for the serial task to process its queue
+        printf("%s", output);
       }
     }
   }
@@ -496,7 +495,7 @@ static bool _Output(tLogger Logger, tLogLevel Level, const char* Module, bool Pe
  @return    True when output allowed
 
  *******************************************************************/
-static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, const char* Output)
+static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, const char* Output, bool Direct)
 {
   bool print = false;
 
@@ -508,22 +507,23 @@ static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, cons
   {
     assert_always();
   }
+  else if (Direct)
+  {
+    // Allow direct output even if not enabled since it bypasses queues and is not
+    // reliant on task superloop. Useful for early boot logs
+    print = true;
+  }
   else if (!SERIAL_IsEnabled(_Port[Logger]))
   {
+    // Serial port not (yet?) enabled
   }
   else if (!_Enabled[Logger])
   {
-  }
-  else if (!_Initialized[Logger])
-  {
+    // Logger not (yet?) enabled
   }
   else if (Level == eLogLevel_None)
   {
-  }
-  else if (Level == eLogLevel_Always)
-  {
-    // Always print at this level
-    print = true;
+    // No output, ever
   }
   else if (_Level[Logger] == eLogLevel_None)
   {
@@ -532,6 +532,12 @@ static bool _WillPrint(tLogger Logger, tLogLevel Level, const char* Module, cons
   else if (Level > _Level[Logger])
   {
     // Level not high enough
+  }
+  else if (!_Initialized[Logger])
+  {
+    // Logger not (yet?) initialized
+    // Allow direct output even if not initialized since it bypasses queues and is not reliant on task superloop
+    // Useful for early boot logs
   }
   else
   {

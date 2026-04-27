@@ -35,7 +35,7 @@ typedef struct
 /* Public variables ----------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
-// static const char* _Module = "RTC";
+static const char* _Module = "RTC";
 
 /* Private function prototypes -----------------------------------------------*/
 /* Public Implementation -----------------------------------------------------*/
@@ -52,6 +52,14 @@ uint32_t RTC_BkupRead(uint32_t BackupRegister)
 
   uint32_t tmp = (uint32_t)&(RTC->BKP0R);
   tmp += (BackupRegister * 4u);
+
+  LOG_Write(eLogger_Sys,
+            eLogLevel_Low,
+            _Module,
+            false,
+            "Reading RTC backup register %lu: 0x%08lX",
+            BackupRegister,
+            (*(__IO uint32_t*)tmp));
 
   return (*(__IO uint32_t*)tmp);
 }
@@ -71,6 +79,9 @@ void RTC_BkupWrite(uint32_t BackupRegister, uint32_t Data)
   tmp += (BackupRegister * 4u);
 
   *(__IO uint32_t*)tmp = Data;
+
+  LOG_Write(
+    eLogger_Sys, eLogLevel_Low, _Module, false, "Writing RTC backup register %lu: 0x%08lX", BackupRegister, Data);
 }
 
 /* Private Implementation -----------------------------------------------------*/

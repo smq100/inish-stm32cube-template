@@ -131,8 +131,6 @@ int main(void)
   // Post-initialization ClassB tests
   ClassB_DoStartUpTests(false);
 
-  HAL_PWR_DisableBkUpAccess(); // Disable access to RTC backup registers after ClassB tests
-
   ClassB_PrintStatus();
 
   HAL_TIM_Base_Start_IT(&htim4); ///< Sleep timer

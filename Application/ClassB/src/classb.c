@@ -332,7 +332,9 @@ void ClassB_PrintStatus(void)
         status_str = "UNKNOWN";
         break;
     }
-    printf("ClassB Startup test '%s': %s\n\r", _StartConfig[i].Name, status_str);
+
+    LOG_WriteDirect(
+      eLogger_Sys, eLogLevel_High, _Module, false, "Startup test '%s': %s", _StartConfig[i].Name, status_str);
   }
 }
 
