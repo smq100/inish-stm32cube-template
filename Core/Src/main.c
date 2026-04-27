@@ -31,6 +31,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "classb.h"
+#include "watchdog.h"
 #include "util.h"
 #include "timer.h"
 #include "uart.h"
@@ -104,7 +105,7 @@ int main(void)
   HAL_PWR_EnableBkUpAccess();
 
   bool vars_reset = ClassB_InitVars(false);
-  ClassB_WdgResetDiagnosticsInit();
+  WDG_ResetDiagnosticsInit();
 
   printf("\r\nHello, World! (csr=0x%08lX, vr=%d)\r\n", _ResetCause, vars_reset);
 
@@ -221,11 +222,11 @@ static void RefreshWatchdogs(void)
   {
     refresh_tick = TIMER_GetTick();
 
-    if (ClassB_IsTestingIWDG())
+    if (WDG_IsTesting())
     {
       // Don't refresh IWDG if we're testing it in ClassB startup tests or manually testing via a Tech Mode command
     }
-    else if (_iwdg_require_heartbeat && !ClassB_WdgCanRefresh())
+    else if (_iwdg_require_heartbeat && !WDG_CanRefresh())
     {
       // Skip IWDG refresh until required heartbeat sources report in.
     }

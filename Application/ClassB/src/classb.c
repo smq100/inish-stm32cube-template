@@ -35,6 +35,8 @@
 
 #define CLASSB_PROTECTED
 
+#include "stm32l1xx_ll_adc.h"
+
 #include "main.h"
 #include "task.h"
 #include "task_system.h"
@@ -43,13 +45,14 @@
 #include "classb_startup.h"
 #include "classb_vars.h"
 #include "classb_params.h"
-#include "log.h"
 #include "eeprom_mcu.h"
+#include "watchdog.h"
+#include "rtc_app.h"
+#include "log.h"
 #include "util.h"
 #include "timer.h"
 #include "dma.h"
 #include "adc.h"
-#include "stm32l1xx_ll_adc.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -122,19 +125,10 @@ static const tClassbRunConfig _RunConfig[] = {
 static_assert(sizeof(_StartConfig) / sizeof(tClassbStartConfig) == eClassBStartItem_NUM, "start size mismatch");
 static_assert(sizeof(_RunConfig) / sizeof(tClassbRunConfig) == eClassBRunItem_NUM, "run size mismatch");
 
-static const uint32_t _WdgExpectedMagic = 0x57444754u;  // 'WDGT'
-
-static bool _IwdgDisabled = false;
-static uint32_t _WdgHeartbeatMask = 0u;
-static bool _StarveWdg = false;  ///< Force IWDG reset
-
 // Startup test status (stored in .noinit RAM section so preserved across sw resets)
 static uint32_t _StartTestStatus[eClassBStartItem_NUM] __attribute__((section(".noinit")));
 
 /* Private function prototypes -----------------------------------------------*/
-static uint32_t _RtcBkupRead(uint32_t BackupRegister);
-static void _RtcBkupWrite(uint32_t BackupRegister, uint32_t Data);
-
 /* Public Implementation -----------------------------------------------------*/
 
 /*******************************************************************/
@@ -173,7 +167,6 @@ bool ClassB_InitVars(bool Force)
     // Clear RAM test status in RTC backup register
     RTC_HandleTypeDef hrtc = { 0 };
     hrtc.Instance = RTC;
-    static_assert(RTC_RAMCHECK_STATUS_REG <= RTC_BKP_DR4);
     (void)HAL_RTCEx_BKUPWrite(&hrtc, RTC_RAMCHECK_STATUS_REG, TEST_CLASSB_NOINIT);
 
     reset = true;
@@ -291,157 +284,20 @@ bool ClassB_IsAllStartupPass(void)
 
 /*******************************************************************/
 /*!
- @brief   Disables IWDG for testing purposes
- @param   None
- @return  None
+ @brief   Returns the status of a specific startup test
+ @param   Test : Test to check
+ @return  Status of the specified test
 *******************************************************************/
-void ClassB_ExpireIWDG(void)
+uint32_t ClassB_GetStartupStatus(tClassBStartItem Test)
 {
-  printf("Disabled IWDG. Waiting for reset...\r\n");
-  _IwdgDisabled = true;
-}
+  uint32_t status = TEST_CLASSB_NOINIT;
 
-/*******************************************************************/
-/*!
- @brief   Checks if IWDG test is in progress
- @param   None
- @return  true if IWDG test is in progress, false otherwise
-*******************************************************************/
-bool ClassB_IsTestingIWDG(void)
-{
-  return _IwdgDisabled;
-}
-
-/*******************************************************************/
-/*!
- @brief   Marks that the next IWDG reset is expected from ClassB startup test
- @return  None
-*******************************************************************/
-void ClassB_MarkExpectedIWDGReset(void)
-{
-  _RtcBkupWrite(RTC_WDGEXPECT_MARKER_REG, _WdgExpectedMagic);
-  _RtcBkupWrite(RTC_WDGEXPECT_MARKERINV_REG, ~_WdgExpectedMagic);
-
-  // Make sure marker writes complete before intentionally expiring IWDG.
-  __DSB();
-  __ISB();
-}
-
-/*******************************************************************/
-/*!
- @brief   Clears expected-IWDG-reset marker
- @return  None
-*******************************************************************/
-void ClassB_ClearExpectedIWDGReset(void)
-{
-  _RtcBkupWrite(RTC_WDGEXPECT_MARKER_REG, 0u);
-  _RtcBkupWrite(RTC_WDGEXPECT_MARKERINV_REG, 0u);
-}
-
-/*******************************************************************/
-/*!
- @brief   Returns true if expected-IWDG-reset marker is valid
- @return  Marker validity
-*******************************************************************/
-bool ClassB_IsExpectedIWDGReset(void)
-{
-  uint32_t marker = _RtcBkupRead(RTC_WDGEXPECT_MARKER_REG);
-  uint32_t marker_inv = _RtcBkupRead(RTC_WDGEXPECT_MARKERINV_REG);
-
-  return (marker == _WdgExpectedMagic) && (marker_inv == ~_WdgExpectedMagic);
-}
-
-/*******************************************************************/
-/*!
- @brief   Classifies IWDG reset cause as expected (startup test) or unexpected
- @return  None
-*******************************************************************/
-void ClassB_WdgResetDiagnosticsInit(void)
-{
-  uint32_t reset_cause = GetResetCause();
-  bool iwdg_was_reset = ((reset_cause & RCC_CSR_IWDGRSTF) != 0u);
-  bool iwdg_expected = ClassB_IsExpectedIWDGReset();
-  bool iwdg_test_inprogress = (_StartTestStatus[eClassBStartItem_IWDG] == TEST_CLASSB_INPROGRESS);
-  tTask last_task = eTask_NUM;
-  const char* last_task_name = NULLPTR;
-  bool has_task_breadcrumb = TASK_GetLastRunningBeforeReset(&last_task, &last_task_name);
-
-  if (iwdg_was_reset)
+  if (Test < eClassBStartItem_NUM)
   {
-    if (has_task_breadcrumb)
-    {
-      printf("IWDG breadcrumb: last task=%s (%u)\r\n", last_task_name, (unsigned)last_task);
-    }
-    else
-    {
-      printf("IWDG breadcrumb: last task=unknown\r\n");
-    }
+    status = _StartTestStatus[Test];
   }
 
-  if (iwdg_was_reset && iwdg_expected && iwdg_test_inprogress)
-  {
-    EEPROM_MCU_IncrementReg(eEEPROM_Reg_WdgResetExpected);
-    printf("ClassB WDG reset classified as EXPECTED (startup test)\r\n");
-  }
-  else if (iwdg_was_reset)
-  {
-    EEPROM_MCU_IncrementReg(eEEPROM_Reg_WdgResetUnexpected);
-    printf("*** Unexpected IWDG reset (marker=%u, startup_iwdg=%u)\r\n",
-           iwdg_expected ? 1u : 0u,
-           iwdg_test_inprogress ? 1u : 0u);
-  }
-  else if (iwdg_expected && !iwdg_test_inprogress)
-  {
-    // Marker present without a matching startup-IWDG in-progress state indicates stale data.
-    printf("*** Clearing stale expected-IWDG marker\r\n");
-  }
-
-  if ((iwdg_was_reset || iwdg_expected) && !iwdg_test_inprogress)
-  {
-    // Keep marker in place across the intentional startup reset path and clear otherwise.
-    ClassB_ClearExpectedIWDGReset();
-  }
-
-  if (iwdg_was_reset)
-  {
-    TASK_ClearLastRunningBeforeReset();
-  }
-}
-
-/*******************************************************************/
-/*!
- @brief   Records a watchdog heartbeat from a system source
- @param   SourceMask: OR-mask of CLASSB_WDG_HB_* sources
- @return  None
-*******************************************************************/
-void ClassB_WdgHeartbeat(uint32_t SourceMask)
-{
-  if (_StarveWdg)
-  {
-    _WdgHeartbeatMask = 0;
-  }
-  else
-  {
-    _WdgHeartbeatMask |= SourceMask;
-  }
-}
-
-/*******************************************************************/
-/*!
- @brief   Returns true when all required watchdog heartbeat sources are present
- @return  Feed permission
-*******************************************************************/
-bool ClassB_WdgCanRefresh(void)
-{
-  bool can_refresh = ((_WdgHeartbeatMask & CLASSB_WDG_HB_REQUIRED) == CLASSB_WDG_HB_REQUIRED);
-
-  if (can_refresh)
-  {
-    // Clear only required heartbeat bits after one successful refresh opportunity.
-    _WdgHeartbeatMask &= ~CLASSB_WDG_HB_REQUIRED;
-  }
-
-  return can_refresh;
+  return status;
 }
 
 /*******************************************************************/
@@ -948,27 +804,6 @@ void ClassB_PrintErrorCounts(void)
 }
 
 /* Private Implementation ----------------------------------------------------*/
-
-static uint32_t _RtcBkupRead(uint32_t BackupRegister)
-{
-  assert_param(IS_RTC_BKP(BackupRegister));
-
-  uint32_t tmp = (uint32_t)&(RTC->BKP0R);
-  tmp += (BackupRegister * 4u);
-
-  return (*(__IO uint32_t*)tmp);
-}
-
-static void _RtcBkupWrite(uint32_t BackupRegister, uint32_t Data)
-{
-  assert_param(IS_RTC_BKP(BackupRegister));
-
-  uint32_t tmp = (uint32_t)&(RTC->BKP0R);
-  tmp += (BackupRegister * 4u);
-
-  *(__IO uint32_t*)tmp = Data;
-}
-
 /* Protected functions ------------------------------------------------------ */
 
 #ifdef CLASSB_PROTECTED

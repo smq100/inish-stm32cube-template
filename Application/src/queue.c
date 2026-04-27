@@ -32,7 +32,6 @@
 ******************************************************************************/
 
 #include "main.h"
-
 #include "queue.h"
 #include "util.h"
 #include "log.h"

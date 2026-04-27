@@ -35,10 +35,10 @@
 #define UART_PROTECTED
 
 #include "main.h"
+#include "task_serial.h"
 #include "uart.h"
 #include "util.h"
 #include "timer.h"
-#include "task_serial.h"
 
 /* Private typedef -----------------------------------------------------------*/
 

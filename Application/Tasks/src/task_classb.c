@@ -39,6 +39,7 @@
 #include "classb.h"
 #include "classb_runtime.h"
 #include "classb_vars.h"
+#include "watchdog.h"
 #include "timer.h"
 #include "log.h"
 
@@ -190,7 +191,7 @@ bool CLASSB_Exec(void)
     // still run any necessary code (e.g. control flow)
     status = _Config[current].Handler(false);
 
-    ClassB_WdgHeartbeat(CLASSB_WDG_HB_CLASSB);
+    WDG_Heartbeat(CLASSB_WDG_HB_CLASSB);
   }
 
   if (status == eClassBRunStatus_NOT_STARTED)

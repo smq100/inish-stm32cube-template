@@ -36,14 +36,14 @@
 #define CLASSB_PROTECTED
 
 #include "main.h"
-#include "test.h"
 #include "task_app.h"
 #include "classb.h"
 #include "classb_runtime.h"
+#include "eeprom_mcu.h"
 #include "classb_params.h"
 #include "classb_vars.h"
+#include "test.h"
 #include "timer.h"
-#include "eeprom_mcu.h"
 #include "log.h"
 
 /* Private typedef -----------------------------------------------------------*/

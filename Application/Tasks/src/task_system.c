@@ -40,13 +40,13 @@
 #include "task_led.h"
 #include "task_daq.h"
 #include "classb.h"
+#include "eeprom_mcu.h"
+#include "eeprom_ext.h"
 #include "power.h"
 #include "log.h"
 #include "timer.h"
 #include "version.h"
 #include "rtc.h"
-#include "eeprom_mcu.h"
-#include "eeprom_ext.h"
 #include "util.h"
 
 /* Private typedef -----------------------------------------------------------*/

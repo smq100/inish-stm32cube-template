@@ -118,7 +118,6 @@ when printed.
 #include "main.h"
 
 #include "task.h"
-
 #include "task_system.h"
 #include "task_serial.h"
 #include "task_daq.h"
@@ -129,6 +128,7 @@ when printed.
 #include "task_led.h"
 #include "classb.h"
 #include "classb_vars.h"
+#include "watchdog.h"
 #include "timer.h"
 #include "power.h"
 #include "util.h"
@@ -413,7 +413,7 @@ bool TASK_Exec(void)
       ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
 
       // Scheduler heartbeat proves the cooperative loop is still making forward progress
-      ClassB_WdgHeartbeat(CLASSB_WDG_HB_TASK_LOOP);
+      WDG_Heartbeat(CLASSB_WDG_HB_TASK_LOOP);
 
       if (_IdleHookEnabled && !taskRan && !_ShutdownInProcess)
       {

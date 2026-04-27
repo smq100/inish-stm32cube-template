@@ -50,6 +50,7 @@
 #include "task_system.h"
 #include "classb_runtime.h"
 #include "eeprom_mcu.h"
+#include "watchdog.h"
 #include "queue.h"
 #include "timer.h"
 #include "log.h"
@@ -1031,7 +1032,7 @@ static bool _Handler_Reboot(char* StreamTokens)
   else if (wdg > 0)
   {
     // Force reset by starving the watchdog
-    ClassB_ExpireIWDG();
+    WDG_Disable();
   }
 
   return true;

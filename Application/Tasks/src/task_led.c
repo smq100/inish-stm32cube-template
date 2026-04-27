@@ -31,7 +31,6 @@
 ******************************************************************************/
 
 #include "main.h"
-
 #include "task_led.h"
 #include "timer.h"
 #include "log.h"

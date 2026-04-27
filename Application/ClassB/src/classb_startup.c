@@ -34,10 +34,12 @@
  ******************************************************************************/
 
 #include "main.h"
-#include "util.h"
 #include "classb.h"
 #include "classb_params.h"
 #include "classb_vars.h"
+#include "util.h"
+#include "watchdog.h"
+#include "rtc_app.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -52,8 +54,6 @@ static uint32_t* _Hold;
 static bool _Success;
 
 /* Private function prototypes -----------------------------------------------*/
-static uint32_t _RtcBkupRead(uint32_t BackupRegister);
-static void _RtcBkupWrite(uint32_t BackupRegister, uint32_t Data);
 static bool _ControlFlowCheckpoint(uint32_t Check);
 
 /* Public Implementation -----------------------------------------------------*/
@@ -112,7 +112,7 @@ bool Start_RAMTest(bool Enabled, uint32_t* Status)
   // Note: No control_flow calls here as RAM test is destructive
   // Note: Use static _Success var because stack gets corrupted
 
-  uint32_t value = _RtcBkupRead(RTC_RAMCHECK_STATUS_REG);
+  uint32_t value = RTC_BkupRead(RTC_RAMCHECK_STATUS_REG);
 
   if (value == TEST_CLASSB_PASS)
   {
@@ -133,7 +133,7 @@ bool Start_RAMTest(bool Enabled, uint32_t* Status)
     CRITICAL_SECTION_END();
 
     // Write status to non-volatile backup register to be read after reset
-    _RtcBkupWrite(RTC_RAMCHECK_STATUS_REG, _Success ? TEST_CLASSB_PASS : TEST_CLASSB_FAIL);
+    RTC_BkupWrite(RTC_RAMCHECK_STATUS_REG, _Success ? TEST_CLASSB_PASS : TEST_CLASSB_FAIL);
 
     // Ensure RTC backup register write completes before forcing system reset
     __DSB();
@@ -207,15 +207,15 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
   if (!Enabled)
   {
     ClassB_ControlFlowEnter(FLOW_START_IWDG);
-    ClassB_ClearExpectedIWDGReset();
+    WDG_ClearExpectedReset();
     printf("*** IWDG startup test disabled\n\r");
     *Status = TEST_CLASSB_PASS;
   }
   else if (*Status == TEST_CLASSB_NOINIT)
   {
     *Status = TEST_CLASSB_INPROGRESS;
-    ClassB_MarkExpectedIWDGReset();
-    ClassB_ExpireIWDG();
+    WDG_MarkExpectedReset();
+    WDG_Disable();
     while (1)
     {
       // Wait for an independent watchdog reset
@@ -223,7 +223,7 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
   }
   else if (*Status == TEST_CLASSB_INPROGRESS)
   {
-    if ((reset_cause & RCC_CSR_IWDGRSTF) && ClassB_IsExpectedIWDGReset())
+    if ((reset_cause & RCC_CSR_IWDGRSTF) && WDG_IsExpectedReset())
     {
       // Independent watchdog reset detected; test passed
       *Status = TEST_CLASSB_PASS;
@@ -234,7 +234,7 @@ bool Start_IWDGTest(bool Enabled, uint32_t* Status)
       *Status = TEST_CLASSB_FAIL;
     }
 
-    ClassB_ClearExpectedIWDGReset();
+    WDG_ClearExpectedReset();
   }
 
   // Call 2 times to compensate for the timeout on first pass
@@ -470,26 +470,6 @@ bool Start_Complete(bool Enabled, uint32_t* Status)
 }
 
 /* Private Implementation ----------------------------------------------------*/
-
-static uint32_t _RtcBkupRead(uint32_t BackupRegister)
-{
-  assert_param(IS_RTC_BKP(BackupRegister));
-
-  uint32_t tmp = (uint32_t)&(RTC->BKP0R);
-  tmp += (BackupRegister * 4u);
-
-  return (*(__IO uint32_t*)tmp);
-}
-
-static void _RtcBkupWrite(uint32_t BackupRegister, uint32_t Data)
-{
-  assert_param(IS_RTC_BKP(BackupRegister));
-
-  uint32_t tmp = (uint32_t)&(RTC->BKP0R);
-  tmp += (BackupRegister * 4u);
-
-  *(__IO uint32_t*)tmp = Data;
-}
 
 /******************************************************************************/
 /**

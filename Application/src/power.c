@@ -33,9 +33,9 @@
 
 #include "main.h"
 #include "power.h"
+#include "task_daq.h"
 #include "timer.h"
 #include "log.h"
-#include "task_daq.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/

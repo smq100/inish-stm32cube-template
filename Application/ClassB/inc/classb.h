@@ -85,10 +85,6 @@ typedef enum
 #define TEST_CLASSB_FAIL ((uint32_t)0xCCCCCCCC)
 #define TEST_CLASSB_DISABLED ((uint32_t)0xDDDDDDDD)
 
-#define CLASSB_WDG_HB_TASK_LOOP ((uint32_t)0x00000001)
-#define CLASSB_WDG_HB_CLASSB ((uint32_t)0x00000002)
-#define CLASSB_WDG_HB_REQUIRED (CLASSB_WDG_HB_TASK_LOOP)  //| CLASSB_WDG_HB_CLASSB)
-
 // clang-format off
 #define CHECKPOINT_START    \
   ( FLOW_START_CPU1 +       \
@@ -124,14 +120,7 @@ bool ClassB_InitVars(bool Force);
 void ClassB_DoStartUpTests(bool PreInit);
 bool ClassB_IsStartupPass(tClassBStartItem Test);
 bool ClassB_IsAllStartupPass(void);
-void ClassB_ExpireIWDG(void);
-bool ClassB_IsTestingIWDG(void);
-void ClassB_MarkExpectedIWDGReset(void);
-void ClassB_ClearExpectedIWDGReset(void);
-bool ClassB_IsExpectedIWDGReset(void);
-void ClassB_WdgResetDiagnosticsInit(void);
-void ClassB_WdgHeartbeat(uint32_t SourceMask);
-bool ClassB_WdgCanRefresh(void);
+uint32_t ClassB_GetStartupStatus(tClassBStartItem Test);
 void ClassB_PrintStatus(void);
 bool ClassB_LoadedViaDebugger(void);
 bool ClassB_IsRuntimeTestEnabled(tClassBRunItem Test, char* Name);

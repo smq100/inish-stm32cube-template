@@ -41,11 +41,6 @@
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 
-// Non volatile backup register to store RAM test result across resets
-#define RTC_RAMCHECK_STATUS_REG RTC_BKP_DR0
-#define RTC_WDGEXPECT_MARKER_REG RTC_BKP_DR1
-#define RTC_WDGEXPECT_MARKERINV_REG RTC_BKP_DR2
-
 #define MAX_FLASH_LATENCY 1
 
 #define CPUTEST_SUCCESS ((uint32_t)0x00000001uL)
