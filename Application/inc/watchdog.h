@@ -26,6 +26,8 @@
 
 #define CLASSB_WDG_HB_TASK_LOOP ((uint32_t)0x00000001)
 #define CLASSB_WDG_HB_CLASSB ((uint32_t)0x00000002)
+
+// TODO - enable CLASSB_WDG_HB_CLASSB heartbeat source
 #define CLASSB_WDG_HB_REQUIRED (CLASSB_WDG_HB_TASK_LOOP)  //| CLASSB_WDG_HB_CLASSB)
 
 /* Exported macros ------------------------------------------------------------*/
@@ -39,10 +41,12 @@ void WDG_MarkExpectedReset(void);
 void WDG_ClearExpectedReset(void);
 bool WDG_IsExpectedReset(void);
 void WDG_ResetDiagnosticsInit(void);
-void WDG_Heartbeat(uint32_t SourceMask);
-bool WDG_CanRefresh(void);
+void WDG_RequireHeartbeat(bool Require);
+void WDG_SetHeartbeat(uint32_t SourceMask);
 
 #ifdef WATCHDOG_PROTECTED
+
+void WDG__Refresh(void);
 
 #endif /* WATCHDOG_PROTECTED */
 

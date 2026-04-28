@@ -57,7 +57,6 @@
 
 /* USER CODE BEGIN PV */
 static uint32_t _ResetCause;
-static bool _iwdg_require_heartbeat = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -142,7 +141,7 @@ int main(void)
   TASK_Init();
 
   // Require watchdog heartbeat from task loop
-  _iwdg_require_heartbeat = true;
+  WDG_RequireHeartbeat(true);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -211,39 +210,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-static void RefreshWatchdogs(void)
-{
-  static const uint32_t refresh_interval_ms = 25;
-  static uint32_t refresh_tick = 0;
-
-  if ((TIMER_GetElapsed_ms(refresh_tick)) >= refresh_interval_ms)
-  {
-    refresh_tick = TIMER_GetTick();
-
-    if (WDG_IsTesting())
-    {
-      // Don't refresh IWDG if we're testing it in ClassB startup tests or manually testing via a Tech Mode command
-    }
-    else if (_iwdg_require_heartbeat && !WDG_CanRefresh())
-    {
-      // Skip IWDG refresh until required heartbeat sources report in.
-    }
-    else
-    {
-#ifndef TEST__DISABLE_IWDG
-      HAL_IWDG_Refresh(&hIWDG_APP);
-#endif
-    }
-  }
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  if (htim->Instance == hTIM_SLEEP_IWDG_CNT.Instance)
-  {
-    RefreshWatchdogs();
-  }
-}
 
 // Note: Include this function in SysTick_Handler in stm32l0xx_it.c
 void Main_SysTickHandler(void)

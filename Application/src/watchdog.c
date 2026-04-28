@@ -24,6 +24,7 @@
 #include "classb_params.h"
 #include "eeprom_mcu.h"
 #include "watchdog.h"
+#include "timer.h"
 #include "log.h"
 #include "rtc_app.h"
 
@@ -38,9 +39,12 @@ static const char* _Module = "WDG";
 static const uint32_t _ExpectedMagic = 0x57444754u;  // 'WDGT'
 static bool _Disabled = false;
 static uint32_t _HeartbeatMask = 0;
-static bool _Starve = false;  ///< Force IWDG reset
+static bool _RequireHeartbeat = false;
 
 /* Private function prototypes -----------------------------------------------*/
+
+static bool _CanRefresh(void);
+
 /* Public Implementation -----------------------------------------------------*/
 /* Private Implementation -----------------------------------------------------*/
 /* Protected Implementation -----------------------------------------------------*/
@@ -55,17 +59,6 @@ void WDG_Disable(void)
 {
   LOG_Write(eLogger_Sys, eLogLevel_High, _Module, false, "Disabled IWDG. Waiting for reset...");
   _Disabled = true;
-}
-
-/*******************************************************************/
-/*!
- @brief   Checks if IWDG test is in progress
- @param   None
- @return  true if IWDG test is in progress, false otherwise
-*******************************************************************/
-bool WDG_IsTesting(void)
-{
-  return _Disabled;
 }
 
 /*******************************************************************/
@@ -166,28 +159,62 @@ void WDG_ResetDiagnosticsInit(void)
 
 /*******************************************************************/
 /*!
+ @brief   Sets whether a valid heartbeat from a system source is required before refreshing IWDG
+ @param   Require: true to require a valid heartbeat, false otherwise
+ @return  None
+*******************************************************************/
+void WDG_RequireHeartbeat(bool Require)
+{
+  _RequireHeartbeat = Require;
+}
+
+/*******************************************************************/
+/*!
  @brief   Records a watchdog heartbeat from a system source
  @param   SourceMask: OR-mask of CLASSB_WDG_HB_* sources
  @return  None
 *******************************************************************/
-void WDG_Heartbeat(uint32_t SourceMask)
+void WDG_SetHeartbeat(uint32_t SourceMask)
 {
-  if (_Starve)
+  _HeartbeatMask |= SourceMask;
+}
+
+/* Protected Implementation -----------------------------------------------------*/
+
+void WDG__Refresh(void)
+{
+  static const uint32_t refresh_interval_ms = 25;
+  static uint32_t refresh_tick = 0;
+
+  if ((TIMER_GetElapsed_ms(refresh_tick)) >= refresh_interval_ms)
   {
-    _HeartbeatMask = 0;
-  }
-  else
-  {
-    _HeartbeatMask |= SourceMask;
+    refresh_tick = TIMER_GetTick();
+
+    if (_Disabled)
+    {
+      // Don't refresh IWDG if we're testing it in ClassB startup tests or manually testing via a Tech Mode command
+    }
+    else if (_RequireHeartbeat && !_CanRefresh())
+    {
+      // Skip IWDG refresh until required heartbeat sources report in.
+    }
+    else
+    {
+#ifndef TEST__DISABLE_IWDG
+      HAL_IWDG_Refresh(&hIWDG_APP);
+#endif
+    }
   }
 }
+
+/* Private Implementation ----------------------------------------------------*/
 
 /*******************************************************************/
 /*!
  @brief   Returns true when all required watchdog heartbeat sources are present
  @return  Feed permission
 *******************************************************************/
-bool WDG_CanRefresh(void)
+static bool _CanRefresh(void)
 {
   bool can_refresh = ((_HeartbeatMask & CLASSB_WDG_HB_REQUIRED) == CLASSB_WDG_HB_REQUIRED);
 
@@ -199,9 +226,3 @@ bool WDG_CanRefresh(void)
 
   return can_refresh;
 }
-
-/* Private Implementation ----------------------------------------------------*/
-
-#ifdef WATCHDOG_PROTECTED
-
-#endif /* WATCHDOG_PROTECTED */

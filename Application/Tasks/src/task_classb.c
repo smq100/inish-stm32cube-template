@@ -191,7 +191,7 @@ bool CLASSB_Exec(void)
     // still run any necessary code (e.g. control flow)
     status = _Config[current].Handler(false);
 
-    WDG_Heartbeat(CLASSB_WDG_HB_CLASSB);
+    WDG_SetHeartbeat(CLASSB_WDG_HB_CLASSB);
   }
 
   if (status == eClassBRunStatus_NOT_STARTED)

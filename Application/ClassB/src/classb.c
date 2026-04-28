@@ -766,6 +766,7 @@ void ClassB_PrintErrorCounts(void)
   uint32_t clk_errors = 0;
   uint32_t wdg_errors = 0;
   uint32_t stack_errors = 0;
+  uint32_t app_errors = 0;
   uint32_t flow_errors = 0;
   uint32_t wdg_expected_resets = 0;
   uint32_t wdg_unexpected_resets = 0;
@@ -777,6 +778,7 @@ void ClassB_PrintErrorCounts(void)
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_CLK, &clk_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_WDG, &wdg_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_Stack, &stack_errors);
+  EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_App, &app_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_ClassBError_Flow, &flow_errors);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_WdgResetExpected, &wdg_expected_resets);
   EEPROM_MCU_ReadReg(eEEPROM_Reg_WdgResetUnexpected, &wdg_unexpected_resets);
@@ -785,7 +787,7 @@ void ClassB_PrintErrorCounts(void)
             eLogLevel_High,
             _Module,
             true,
-            "ClassB Errors: CPU=%lu, RAM=%lu, CRC=%lu,  ADC=%lu, CLK=%lu, WDG=%lu, STK=%lu, FLO=%lu",
+            "ClassB Errors: CPU=%lu, RAM=%lu, CRC=%lu,  ADC=%lu, CLK=%lu, WDG=%lu, STK=%lu, APP=%lu, FLO=%lu",
             cpu_errors,
             ram_errors,
             crc_errors,
@@ -794,6 +796,7 @@ void ClassB_PrintErrorCounts(void)
             adc_errors,
             wdg_errors,
             stack_errors,
+            app_errors,
             flow_errors);
 
   LOG_Write(eLogger_Sys,

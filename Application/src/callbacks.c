@@ -30,11 +30,14 @@
  @date    2026-March
 
  ******************************************************************************/
+
 #define CLASSB_PROTECTED
 #define ZEROCROSS_PROTECTED
+#define WATCHDOG_PROTECTED
 
 #include "main.h"
 #include "classb.h"
+#include "watchdog.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -61,5 +64,13 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
   {
     extern volatile bool _ADCDMAComplete;
     _ADCDMAComplete = true;
+  }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
+{
+  if (htim->Instance == hTIM_SLEEP_IWDG_CNT.Instance)
+  {
+    WDG__Refresh();
   }
 }

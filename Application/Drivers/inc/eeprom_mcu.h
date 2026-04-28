@@ -43,7 +43,6 @@
 typedef enum
 {
   eEEPROM_Reg_BootCount,
-  eEEPROM_Reg_ModelIndex,
   eEEPROM_Reg_LogIndex,
   eEEPROM_Reg_ClassBError_CPU,
   eEEPROM_Reg_ClassBError_RAM,
@@ -52,6 +51,7 @@ typedef enum
   eEEPROM_Reg_ClassBError_CLK,
   eEEPROM_Reg_ClassBError_WDG,
   eEEPROM_Reg_ClassBError_Stack,
+  eEEPROM_Reg_ClassBError_App,
   eEEPROM_Reg_ClassBError_Flow,
   eEEPROM_Reg_WdgResetExpected,
   eEEPROM_Reg_WdgResetUnexpected,

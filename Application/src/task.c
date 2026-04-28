@@ -413,7 +413,7 @@ bool TASK_Exec(void)
       ClassB_SetVar(eClassBVar_TASK_ACTIVETASK_ENUM, (tDataValue){ .Enum = (uint8_t)_ActiveTask });
 
       // Scheduler heartbeat proves the cooperative loop is still making forward progress
-      WDG_Heartbeat(CLASSB_WDG_HB_TASK_LOOP);
+      WDG_SetHeartbeat(CLASSB_WDG_HB_TASK_LOOP);
 
       if (_IdleHookEnabled && !taskRan && !_ShutdownInProcess)
       {
